@@ -1,0 +1,48 @@
+{
+  "schema_version": "1",
+  "synthetic": true,
+  "source": {
+    "source_id": "synthetic-macro-example",
+    "origin": {"kind": "fixture", "locator": "synthetic-macro-example"},
+    "media_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "duration_seconds": 30.0
+  },
+  "transcript": {
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "duration_seconds": 30.0,
+    "language": "en",
+    "backend": "synthetic-fixture",
+    "model_version": "fixture-v1",
+    "timing": "word",
+    "segments": [
+      {
+        "segment_id": "s1",
+        "start": 1.0,
+        "end": 12.0,
+        "text": "Borrowing costs can affect corporate earnings.",
+        "words": [
+          {"word": "Borrowing", "start": 1.0, "end": 2.0},
+          {"word": "costs", "start": 2.0, "end": 3.0},
+          {"word": "can", "start": 3.0, "end": 4.0},
+          {"word": "affect", "start": 4.0, "end": 5.0},
+          {"word": "corporate", "start": 5.0, "end": 6.0},
+          {"word": "earnings.", "start": 6.0, "end": 7.0}
+        ]
+      }
+    ]
+  },
+  "candidates": [
+    {
+      "clip_id": "c1",
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_duration_seconds": 30.0,
+      "span": {"start": 0.0, "end": 30.0},
+      "source_window_id": "w1",
+      "topic_path": "equity_macro",
+      "market_connection": "Borrowing costs affect corporate earnings.",
+      "content_type": "education",
+      "evidence": [{"segment_id": "s1", "start": 1.0, "end": 12.0, "quote": "Borrowing costs can affect corporate earnings."}],
+      "title": "How borrowing costs affect earnings"
+    }
+  ]
+}

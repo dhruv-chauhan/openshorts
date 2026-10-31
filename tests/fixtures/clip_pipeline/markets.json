@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "version": "synthetic-fixture-v1",
+  "markets": [
+    {
+      "market_id": "xyz:EXAMPLE",
+      "underlying_name": "Fictional Example Corporation",
+      "asset_type": "equity",
+      "aliases": ["Example Corp"],
+      "enabled": true
+    }
+  ]
+}

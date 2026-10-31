@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "workspace": "../output/clip-pipeline",
+  "policy_path": "market-policy.example.json",
+  "foundry": {
+    "endpoint": "https://YOUR-RESOURCE.openai.azure.com/openai/v1/",
+    "relevance_deployment": "YOUR-DEPLOYMENT",
+    "selection_deployment": "YOUR-DEPLOYMENT",
+    "audit_deployment": "YOUR-DEPLOYMENT",
+    "auth_mode": "managed_identity"
+  },
+  "markets": {
+    "mode": "api",
+    "url": "https://backend.example.invalid/allowed-markets",
+    "bearer_token_env": "CLIP_MARKETS_API_TOKEN"
+  },
+  "blob": {
+    "account_url": "https://YOUR-STORAGE.blob.core.windows.net",
+    "runs_container": "clip-runs",
+    "approved_container": "approved-clips"
+  }
+}

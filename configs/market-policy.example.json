@@ -1,0 +1,50 @@
+{
+  "schema_version": "1",
+  "version": "market-policy-v1",
+  "allowed_market_description": "Substantive views, news, updates, analysis, explanation, education or advice about an enabled market's underlying asset or company. A passing mention does not qualify.",
+  "equity_macro_description": "Explain a direct equity-market connection through corporate economics, earnings, borrowing costs, discount rates, inflation, demand, investor sentiment, liquidity or capital flows. A specific ticker is optional; do not invent a connection absent from the content.",
+  "rules": [
+    {
+      "rule_id": "substantive_relevance",
+      "severity": "reject",
+      "instruction": "Require an allowed-market match or evidenced equity-market macro mechanism, supported by exact transcript spans.",
+      "positive_examples": ["An explanation of how borrowing costs affect corporate earnings."],
+      "negative_examples": ["A company name mentioned once during an unrelated product review."]
+    },
+    {
+      "rule_id": "no_sponsor_or_housekeeping",
+      "severity": "reject",
+      "instruction": "Exclude sponsor reads, advertising, housekeeping and unrelated calls to action."
+    },
+    {
+      "rule_id": "complete_context",
+      "severity": "reject",
+      "instruction": "Preserve a complete idea, necessary question or antecedent, qualifications, counterarguments and time horizon."
+    },
+    {
+      "rule_id": "faithful_attribution",
+      "severity": "reject",
+      "instruction": "Opinions and advice are eligible. Preserve attribution and uncertainty; do not reject a view merely because the model disagrees."
+    },
+    {
+      "rule_id": "grounded_copy",
+      "severity": "reject",
+      "instruction": "Do not invent claims, numbers, urgency or investment recommendations in titles, hooks or captions."
+    },
+    {
+      "rule_id": "material_numbers",
+      "severity": "review",
+      "instruction": "Flag ambiguity in currencies, units, prices, percentages or earnings periods; preserve their exact meaning."
+    },
+    {
+      "rule_id": "freshness",
+      "severity": "review",
+      "instruction": "Keep historical and uncertain event dates explicit. Do not present old news or predictions as current."
+    },
+    {
+      "rule_id": "distinct_moment",
+      "severity": "reject",
+      "instruction": "Exclude repeated moments while preserving distinct arguments and opposing views."
+    }
+  ]
+}

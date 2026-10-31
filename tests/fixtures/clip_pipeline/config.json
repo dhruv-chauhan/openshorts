@@ -1,0 +1,12 @@
+{
+  "workspace": "../../../output/clip-pipeline-fixture",
+  "policy_path": "../../../configs/market-policy.example.json",
+  "foundry": {
+    "endpoint": "https://fixture.openai.azure.com/openai/v1/",
+    "relevance_deployment": "fixture-only",
+    "selection_deployment": "fixture-only",
+    "audit_deployment": "fixture-only",
+    "auth_mode": "developer_identity"
+  },
+  "markets": {"mode": "snapshot", "path": "markets.json", "purpose": "development"}
+}

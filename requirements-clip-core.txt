@@ -1,0 +1,2 @@
+# Phase A controller only. No media stack, cloud SDK, or API server required.
+pydantic==2.12.5
