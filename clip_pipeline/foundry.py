@@ -145,10 +145,15 @@ class AttemptUsage:
 
 class FoundryBackend:
     def __init__(self, config: PipelineConfig, *, client=None,
-                 sleep: Callable = time.sleep, jitter: Callable = random.random):
+                 sleep: Callable = time.sleep, jitter: Callable = random.random,
+                 prior_calls: int = 0, prior_tokens: int = 0, budget_sink=None):
         self.config = config
         self.usage: list[AttemptUsage] = []
-        self._charged_tokens = 0
+        if prior_calls < 0 or prior_tokens < 0:
+            raise ValueError("prior usage cannot be negative")
+        self._prior_calls = prior_calls
+        self._charged_tokens = prior_tokens
+        self._budget_sink = budget_sink
         self._sleep, self._jitter = sleep, jitter
         self._credential = None
         self._owns_client = client is None
@@ -219,6 +224,8 @@ class FoundryBackend:
         ))
         # Keep the reservation for requests whose usage is unknown (including errors).
         self._charged_tokens += max(reserved, total or 0)
+        if self._budget_sink:
+            self._budget_sink(self._prior_calls + len(self.usage), self._charged_tokens, self.usage_report())
 
     def _delay(self, exc, attempt):
         headers = getattr(getattr(exc, "response", None), "headers", {})
@@ -249,9 +256,14 @@ class FoundryBackend:
             reserved = request_budget(messages, schema, settings.max_output_tokens)
             if reserved > self.config.selection.context_budget_tokens:
                 raise FoundryError("context_budget_exceeded")
-            if (len(self.usage) >= self.config.limits.max_model_calls or
+            if (self._prior_calls + len(self.usage) >= self.config.limits.max_model_calls or
                     self._charged_tokens + reserved > self.config.limits.max_model_tokens):
                 raise FoundryError("model_budget_exceeded")
+            # Reserve durably BEFORE network IO. A killed request retains its
+            # reservation on resume even when the service's usage is unknown.
+            if self._budget_sink:
+                self._budget_sink(self._prior_calls + len(self.usage) + 1,
+                                  self._charged_tokens + reserved, self.usage_report())
             request = dict(model=deployment, messages=messages,
                            response_format={"type": "json_schema", "json_schema": {
                                "name": response_model.__name__, "strict": True, "schema": schema}},

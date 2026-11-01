@@ -1,0 +1,31 @@
+{
+  "retrieved_date": "2026-11-01",
+  "sources": [
+    {
+      "source_url": "https://docs.trade.xyz/perpetuals/specifications-and-schedules/specification-index",
+      "source_sha256": "0f8f3d86e34cd0edcb0f6997f44c0f502ceca87bed8d7fd6de262b7aea32256d",
+      "included_market_count": 118
+    },
+    {
+      "source_url": "https://docs.trade.xyz/perpetuals/specifications-and-schedules/pre-ipo-specification-index",
+      "source_sha256": "351644987380cf1d988b2d1d1f26c51671fd99d7f64ab6cce5cf6db6fbfe97ca",
+      "included_status": "Live",
+      "included_market_ids": [
+        "xyz:ANT",
+        "xyz:OURA"
+      ],
+      "converted_market_ids_already_in_standard_index": [
+        "xyz:JIO",
+        "xyz:SHEIN",
+        "xyz:UNITREE",
+        "xyz:CXMT",
+        "xyz:SKHY",
+        "xyz:SPCX",
+        "xyz:QNT",
+        "xyz:CBRS"
+      ]
+    }
+  ],
+  "market_count": 120,
+  "purpose": "User-requested development mock; standard specification-index instruments plus Live pre-IPO instruments. Converted entries are reconciled to existing standard instruments without duplication or overwriting their asset type. Not the production Megastocks allowlist. Names and asset types normalized from instrument descriptions; aliases are conservative, not inferred index membership or corporate relationships."
+}

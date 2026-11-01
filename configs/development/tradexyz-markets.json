@@ -1,0 +1,1093 @@
+{
+  "schema_version": "1",
+  "version": "tradexyz-combined-indexes-2026-11-01-development-v2",
+  "markets": [
+    {
+      "market_id": "xyz:SP500",
+      "underlying_name": "S&P 500 Index",
+      "asset_type": "index",
+      "aliases": [
+        "SP500"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:XYZ100",
+      "underlying_name": "XYZ100 US technology and growth equity index",
+      "asset_type": "index",
+      "aliases": [
+        "XYZ100"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BRENTOIL",
+      "underlying_name": "Brent crude oil",
+      "asset_type": "commodity",
+      "aliases": [
+        "BRENTOIL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:WTIOIL",
+      "underlying_name": "WTI crude oil",
+      "asset_type": "commodity",
+      "aliases": [
+        "WTIOIL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NATGAS",
+      "underlying_name": "Henry Hub natural gas",
+      "asset_type": "commodity",
+      "aliases": [
+        "NATGAS"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:GOLD",
+      "underlying_name": "Gold",
+      "asset_type": "commodity",
+      "aliases": [
+        "GOLD"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SILVER",
+      "underlying_name": "Silver",
+      "asset_type": "commodity",
+      "aliases": [
+        "SILVER"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:PLATINUM",
+      "underlying_name": "Platinum",
+      "asset_type": "commodity",
+      "aliases": [
+        "PLATINUM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:PALLADIUM",
+      "underlying_name": "Palladium",
+      "asset_type": "commodity",
+      "aliases": [
+        "PALLADIUM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:COPPER",
+      "underlying_name": "Copper",
+      "asset_type": "commodity",
+      "aliases": [
+        "COPPER"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:JPY",
+      "underlying_name": "USD/JPY exchange rate",
+      "asset_type": "fx",
+      "aliases": [
+        "JPY"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:EUR",
+      "underlying_name": "EUR/USD exchange rate",
+      "asset_type": "fx",
+      "aliases": [
+        "EUR"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:GBP",
+      "underlying_name": "GBP/USD exchange rate",
+      "asset_type": "fx",
+      "aliases": [
+        "GBP"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:URNM",
+      "underlying_name": "Sprott Uranium Miners ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "URNM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:TSLA",
+      "underlying_name": "Tesla, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "TSLA"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NVDA",
+      "underlying_name": "NVIDIA Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "NVDA"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:GOOGL",
+      "underlying_name": "Alphabet Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "GOOGL",
+        "Google"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:INTC",
+      "underlying_name": "Intel Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "INTC"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:MU",
+      "underlying_name": "Micron Technology, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "MU"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:PLTR",
+      "underlying_name": "Palantir Technologies Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "PLTR"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:ORCL",
+      "underlying_name": "Oracle Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "ORCL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:MSTR",
+      "underlying_name": "Strategy Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "MSTR"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:MSFT",
+      "underlying_name": "Microsoft Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "MSFT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:META",
+      "underlying_name": "Meta Platforms, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "META",
+        "Facebook",
+        "Instagram",
+        "WhatsApp"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:AMZN",
+      "underlying_name": "Amazon.com, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "AMZN"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:AMD",
+      "underlying_name": "Advanced Micro Devices, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "AMD"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:AAPL",
+      "underlying_name": "Apple Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "AAPL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:COIN",
+      "underlying_name": "Coinbase Global, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "COIN"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:HOOD",
+      "underlying_name": "Robinhood Markets, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "HOOD"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NFLX",
+      "underlying_name": "Netflix, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "NFLX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:CRCL",
+      "underlying_name": "Circle Internet Group, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "CRCL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SNDK",
+      "underlying_name": "Sandisk Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "SNDK"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:RIVN",
+      "underlying_name": "Rivian Automotive, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "RIVN"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:USAR",
+      "underlying_name": "USA Rare Earth, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "USAR"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:TSM",
+      "underlying_name": "Taiwan Semiconductor Manufacturing Company Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "TSM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SKHYNIX",
+      "underlying_name": "SK hynix Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "SKHYNIX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SAMSUNG",
+      "underlying_name": "Samsung Electronics Co., Ltd",
+      "asset_type": "equity",
+      "aliases": [
+        "SAMSUNG"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:HYUNDAI",
+      "underlying_name": "Hyundai Motor Company",
+      "asset_type": "equity",
+      "aliases": [
+        "HYUNDAI"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:EWY",
+      "underlying_name": "iShares MSCI South Korea ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "EWY"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:EWJ",
+      "underlying_name": "iShares MSCI Japan ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "EWJ"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:EWT",
+      "underlying_name": "iShares MSCI Taiwan ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "EWT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BABA",
+      "underlying_name": "Alibaba Group Holding Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "BABA"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:CRWV",
+      "underlying_name": "CoreWeave, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "CRWV"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:DKNG",
+      "underlying_name": "DraftKings Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "DKNG"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:HIMS",
+      "underlying_name": "Hims & Hers Health, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "HIMS"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:COST",
+      "underlying_name": "Costco Wholesale Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "COST"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:LLY",
+      "underlying_name": "Eli Lilly and Company",
+      "asset_type": "equity",
+      "aliases": [
+        "LLY"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:JP225",
+      "underlying_name": "Japan 225 equity index",
+      "asset_type": "index",
+      "aliases": [
+        "JP225"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:KR200",
+      "underlying_name": "Korea 200 equity index",
+      "asset_type": "index",
+      "aliases": [
+        "KR200"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BIRD",
+      "underlying_name": "Smartbird, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "BIRD"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:DRAM",
+      "underlying_name": "Roundhill Memory ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "DRAM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:XLE",
+      "underlying_name": "State Street Energy Select Sector SPDR ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "XLE"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BX",
+      "underlying_name": "Blackstone Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "BX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:LITE",
+      "underlying_name": "Lumentum Holdings Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "LITE"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:GME",
+      "underlying_name": "GameStop Corp",
+      "asset_type": "equity",
+      "aliases": [
+        "GME"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:RKLB",
+      "underlying_name": "Rocket Lab Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "RKLB"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:MRVL",
+      "underlying_name": "Marvell Technology, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "MRVL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:ZM",
+      "underlying_name": "Zoom Communications, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "ZM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:EWZ",
+      "underlying_name": "iShares MSCI Brazil ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "EWZ"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:EBAY",
+      "underlying_name": "eBay Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "EBAY"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:CBRS",
+      "underlying_name": "Cerebras Systems Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "CBRS"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:PURRDAT",
+      "underlying_name": "Hyperliquid Strategies Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "PURRDAT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:ARM",
+      "underlying_name": "Arm Holdings plc",
+      "asset_type": "equity",
+      "aliases": [
+        "ARM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BB",
+      "underlying_name": "BlackBerry Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "BB"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:ASML",
+      "underlying_name": "ASML Holding N.V",
+      "asset_type": "equity",
+      "aliases": [
+        "ASML"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:IBM",
+      "underlying_name": "International Business Machines Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "IBM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:DELL",
+      "underlying_name": "Dell Technologies Inc. Class C",
+      "asset_type": "equity",
+      "aliases": [
+        "DELL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:AVGO",
+      "underlying_name": "Broadcom Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "AVGO"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:QNT",
+      "underlying_name": "Quantinuum Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "QNT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NOW",
+      "underlying_name": "ServiceNow, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "NOW"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:WDC",
+      "underlying_name": "Western Digital Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "WDC"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NBIS",
+      "underlying_name": "Nebius Group N.V. Class A",
+      "asset_type": "equity",
+      "aliases": [
+        "NBIS"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SPCX",
+      "underlying_name": "Space Exploration Technologies Corp",
+      "asset_type": "equity",
+      "aliases": [
+        "SPCX",
+        "SpaceX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BE",
+      "underlying_name": "Bloom Energy Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "BE"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SMH",
+      "underlying_name": "VanEck Semiconductor ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "SMH"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NOK",
+      "underlying_name": "Nokia Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "NOK"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:MINIMAX",
+      "underlying_name": "MiniMax Group Inc. Class A",
+      "asset_type": "equity",
+      "aliases": [
+        "MINIMAX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:ZHIPU",
+      "underlying_name": "Knowledge Atlas Technology Joint Stock Company Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "ZHIPU"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:QCOM",
+      "underlying_name": "QUALCOMM Incorporated",
+      "asset_type": "equity",
+      "aliases": [
+        "QCOM"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:STRC",
+      "underlying_name": "Strategy Inc's Variable Rate Series A Perpetual Stretch Preferred Stock",
+      "asset_type": "equity",
+      "aliases": [
+        "STRC"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:KIOXIA",
+      "underlying_name": "Kioxia Holdings Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "KIOXIA"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SOFTBANK",
+      "underlying_name": "SoftBank Group Corp",
+      "asset_type": "equity",
+      "aliases": [
+        "SOFTBANK"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BOT",
+      "underlying_name": "RoboStrategy, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "BOT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:AMAT",
+      "underlying_name": "Applied Materials, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "AMAT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SHAZ",
+      "underlying_name": "SharonAI Holdings Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "SHAZ"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SKHY",
+      "underlying_name": "SK hynix Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "SKHY"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:GIGADEV",
+      "underlying_name": "GigaDevice Semiconductor Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "GIGADEV"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:CXMT",
+      "underlying_name": "CXMT Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "CXMT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:KORU",
+      "underlying_name": "Direxion Daily MSCI South Korea Bull 3X ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "KORU"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:GEV",
+      "underlying_name": "GE Vernova Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "GEV"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:LYTE",
+      "underlying_name": "Roundhill Photonics & Optics ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "LYTE"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NCLD",
+      "underlying_name": "Roundhill Neocloud ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "NCLD"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SOXL",
+      "underlying_name": "Direxion Daily Semiconductor Bull 3X Shares",
+      "asset_type": "etf",
+      "aliases": [
+        "SOXL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:IREN",
+      "underlying_name": "IREN Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "IREN"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:AAOI",
+      "underlying_name": "Applied Optoelectronics, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "AAOI"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:RDDT",
+      "underlying_name": "Reddit, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "RDDT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NET",
+      "underlying_name": "Cloudflare, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "NET"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:CRWD",
+      "underlying_name": "CrowdStrike Holdings, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "CRWD"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:MAGS",
+      "underlying_name": "Roundhill Magnificent Seven ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "MAGS"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:UNITREE",
+      "underlying_name": "Yushu Technology Co., Ltd",
+      "asset_type": "equity",
+      "aliases": [
+        "UNITREE"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:MRNA",
+      "underlying_name": "Moderna, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "MRNA"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:XBI",
+      "underlying_name": "SPDR S&P Biotech ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "XBI"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SHEIN",
+      "underlying_name": "SHEIN Global Holdings Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "SHEIN"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:BMNR",
+      "underlying_name": "BitMine Immersion Technologies, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "BMNR"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:KSTR",
+      "underlying_name": "KraneShares China Technology & Semiconductor STAR 50 Index ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "KSTR"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:SNXX",
+      "underlying_name": "Tradr 2X Long SNDK Daily ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "SNXX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:CVX",
+      "underlying_name": "Chevron Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "CVX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:TLT",
+      "underlying_name": "iShares 20+ Year Treasury Bond ETF",
+      "asset_type": "etf",
+      "aliases": [
+        "TLT"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:DIESEL",
+      "underlying_name": "US diesel fuel",
+      "asset_type": "commodity",
+      "aliases": [
+        "DIESEL"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:UMC",
+      "underlying_name": "United Microelectronics Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "UMC"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:LRCX",
+      "underlying_name": "Lam Research Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "LRCX"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:GLW",
+      "underlying_name": "Corning Incorporated",
+      "asset_type": "equity",
+      "aliases": [
+        "GLW"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:TWST",
+      "underlying_name": "Twist Bioscience Corporation",
+      "asset_type": "equity",
+      "aliases": [
+        "TWST"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:CAMBRICON",
+      "underlying_name": "Cambricon Technologies Corporation Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "CAMBRICON"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:RELIANCE",
+      "underlying_name": "Reliance Industries Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "RELIANCE"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:NIFTY",
+      "underlying_name": "NIFTY 50 equity index",
+      "asset_type": "index",
+      "aliases": [
+        "NIFTY"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:JIO",
+      "underlying_name": "Jio Platforms Limited",
+      "asset_type": "equity",
+      "aliases": [
+        "JIO"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:ICE",
+      "underlying_name": "Intercontinental Exchange, Inc",
+      "asset_type": "equity",
+      "aliases": [
+        "ICE"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:ANT",
+      "underlying_name": "Anthropic, PBC",
+      "asset_type": "pre_ipo",
+      "aliases": [
+        "ANT",
+        "Anthropic"
+      ],
+      "enabled": true
+    },
+    {
+      "market_id": "xyz:OURA",
+      "underlying_name": "Oura Inc.",
+      "asset_type": "pre_ipo",
+      "aliases": [
+        "OURA",
+        "Oura"
+      ],
+      "enabled": true
+    }
+  ]
+}

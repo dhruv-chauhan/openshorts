@@ -33,5 +33,31 @@ def story_preview(plan, sequences):
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Unaudited story preview</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; media-src 'self' file:; style-src 'unsafe-inline'">
 <style>body{{font:16px system-ui;background:#15171b;color:#eee;max-width:850px;margin:24px auto;padding:0 16px}}a{{color:#9fcbff}}video{{display:block;width:min(100%,360px);max-height:75vh;margin:16px 0}}article{{border-top:1px solid #555;margin:24px 0;padding:16px 0}}code{{overflow-wrap:anywhere}}nav{{line-height:1.8}}.warning{{background:#423719;padding:16px}}</style>
-</head><body><h1>Story sequence preview</h1><p class="warning">UNAUDITED · NOT APPROVED. Manual selection; no topic decision or content audit. Review every story and the sequence, including omitted context, caption placement and pacing.</p>
-<p>Source: {escape(plan.source.locator)}</p>{body}</body></html>'''
+</head><body><h1>Story sequence preview</h1><p class="warning">UNAUDITED · NOT APPROVED. Supplied story plan; no final-media audit or approval. Review every story and the sequence, including omitted context, caption placement and pacing.</p>
+<p>Selection method: {escape(plan.selection_method)}. Source: {escape(plan.source.locator)}</p>{body}</body></html>'''
+
+
+def selection_preview(plan, report, transcript):
+    """Text-first editorial review, including withheld proposals and source gaps."""
+    accepted = {s.sequence_id for s in plan.sequences}
+    sections = []
+    for region in report['proposals']:
+        for sequence in region['sequences']:
+            cards = []
+            for story in sequence['stories']:
+                span = story['span']
+                words = [w.word for segment in transcript.segments for w in segment.words
+                         if w.start >= span['start'] and w.end <= span['end']]
+                cards.append(f"<article><h3>{escape(story['title'])}</h3><p>{span['start']:.2f}–{span['end']:.2f}s · "
+                             f"{escape(story['stance'])} · {escape(story['topic_path'])}</p><p>{escape(' '.join(words))}</p>"
+                             f"<p>Market connection: {escape(story['market_connection'])}</p></article>")
+            gaps = ''.join(f"<li>{o['start']:.2f}–{o['end']:.2f}s: {escape(o['reason'])}</li>" for o in sequence['omissions'])
+            state = 'Selected for unaudited rendering' if sequence['sequence_id'] in accepted else 'Withheld — inspect selection report'
+            sections.append(f"<section><h2>{escape(sequence['title'])}</h2><p>{state}</p>{''.join(cards)}<ul>{gaps}</ul></section>")
+    reasons = ''.join(f'<li>{escape(r)}</li>' for r in report['review_reasons'])
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Selection review</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<style>body{{font:17px system-ui;max-width:900px;margin:30px auto;padding:20px;line-height:1.6}}section{{border-top:1px solid #999}}article{{padding:10px 20px;background:#f2f4f6}}</style></head><body>
+<h1>Pre-render story selection</h1><p>UNAUDITED · NOT APPROVED. Outcome: {escape(report['outcome'])}.
+All {len(report['windows'])} transcript windows evaluated. This preview is not a final-audio or visual audit.</p>
+<ul>{reasons}</ul>{''.join(sections) or '<p>No story proposals.</p>'}</body></html>'''

@@ -2,9 +2,10 @@
 
 The optional [clip-only Azure profile](../clip-only-runbook.md) has a separate
 Foundry adapter and a zero clip minimum. It never calls the legacy selectors
-described below, including the silent-video fallback. Its CLI currently supports
-input preparation and model preflight; policy selection is implemented in a later
-phase. The existing application keeps the legacy selection behavior.
+described below, including the silent-video fallback. Its CLI supports input preparation, model preflight, manual story rendering,
+and market-policy selection from reusable source/transcript artifacts. The policy
+selector evaluates all windows and emits complete story plans or explicit no-match/
+review outcomes; final-media audits remain a later phase. The existing application keeps the legacy selection behavior.
 
 ## How many clips a job returns (`clip_selection.py`, `main.get_viral_clips`)
 

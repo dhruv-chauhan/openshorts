@@ -1,0 +1,37 @@
+{
+  "schema_version": "1",
+  "workspace": "../output/clip-pipeline",
+  "policy_path": "market-policy.example.json",
+  "foundry": {
+    "endpoint": "https://YOUR-RESOURCE.openai.azure.com/openai/v1/",
+    "relevance_deployment": "YOUR-DEPLOYMENT",
+    "selection_deployment": "YOUR-DEPLOYMENT",
+    "audit_deployment": "YOUR-DEPLOYMENT",
+    "auth_mode": "managed_identity",
+    "structured_outputs": true,
+    "output_token_parameter": "max_completion_tokens",
+    "max_output_tokens": 12000,
+    "temperature": null,
+    "reasoning_effort": "medium"
+  },
+  "markets": {
+    "mode": "mock_api",
+    "path": "development/tradexyz-markets.json",
+    "purpose": "development"
+  },
+  "blob": null,
+  "stories": {
+    "max_sequences": 5,
+    "max_stories_per_sequence": 5,
+    "max_story_seconds": 300.0,
+    "max_sequence_seconds": 900.0,
+    "preferred_sequence_min_seconds": 60.0,
+    "preferred_sequence_max_seconds": 180.0
+  },
+  "selection": {
+    "context_budget_tokens": 262144,
+    "window_seconds": 45.0,
+    "overlap_segments": 1,
+    "relevance_batch_windows": 4
+  }
+}

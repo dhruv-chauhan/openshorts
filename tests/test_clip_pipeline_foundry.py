@@ -304,3 +304,24 @@ def test_bad_capability_settings(config_data, updates):
     config_data["foundry"].update(updates)
     with pytest.raises(ValidationError):
         PipelineConfig.model_validate(config_data)
+
+
+def test_durable_reservation_survives_interrupted_request(config_data):
+    config_data['limits'] = {'max_model_calls': 1, 'max_model_tokens': 100000}
+    config = PipelineConfig.model_validate(config_data)
+    reservations = []
+    requests = []
+    def interrupted(request):
+        requests.append(request)
+        raise KeyboardInterrupt
+    client = OpenAI(api_key='test-only', base_url=config.foundry.endpoint, max_retries=0,
+                    http_client=httpx2.Client(transport=httpx2.MockTransport(interrupted)))
+    sink = lambda calls,tokens,attempts: reservations.append((calls,tokens,attempts))
+    with client:
+        b = FoundryBackend(config, client=client, budget_sink=sink)
+        with pytest.raises(KeyboardInterrupt): generate(b)
+        assert reservations[-1][0] == 1 and reservations[-1][1] > 0 and not b.usage
+        resumed = FoundryBackend(config, client=client, prior_calls=reservations[-1][0],
+                                 prior_tokens=reservations[-1][1], budget_sink=sink)
+        with pytest.raises(FoundryError, match='model_budget_exceeded'): generate(resumed)
+    assert len(requests) == 1

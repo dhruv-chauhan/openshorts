@@ -76,12 +76,21 @@ class SnapshotMarkets(Contract):
     purpose: Literal["development"] = "development"
 
 
+class MockApiMarkets(Contract):
+    mode: Literal["mock_api"]
+    path: Text
+    purpose: Literal["development"] = "development"
+
+
 class SelectionConfig(Contract):
     min_seconds: Annotated[float, Field(ge=5, le=175)] = 15.0
     max_seconds: Annotated[float, Field(ge=10, le=180)] = 60.0
     min_clips: Annotated[int, Field(ge=0, le=0)] = 0
     max_candidates: Annotated[int, Field(ge=1, le=100)] = 5
     context_budget_tokens: Annotated[int, Field(ge=1024)] = 16000
+    window_seconds: Annotated[float, Field(ge=10, le=300)] = 45.0
+    overlap_segments: Annotated[int, Field(ge=1, le=10)] = 1
+    relevance_batch_windows: Annotated[int, Field(ge=1, le=20)] = 4
 
     @model_validator(mode="after")
     def duration_band(self):
@@ -171,7 +180,7 @@ class PipelineConfig(Contract):
     workspace: Text
     policy_path: Text
     foundry: FoundryConfig
-    markets: Annotated[ApiMarkets | SnapshotMarkets, Field(discriminator="mode")]
+    markets: Annotated[ApiMarkets | SnapshotMarkets | MockApiMarkets, Field(discriminator="mode")]
     blob: BlobConfig | None = None
     selection: SelectionConfig = Field(default_factory=SelectionConfig)
     stories: StoriesConfig = Field(default_factory=StoriesConfig)
@@ -199,7 +208,7 @@ def load_config(path: Path) -> PipelineConfig:
     data = config.model_dump(mode="json")
     for key in ("workspace", "policy_path"):
         data[key] = str(resolve_path(data[key], path.parent))
-    if config.markets.mode == "snapshot":
+    if config.markets.mode in {"snapshot", "mock_api"}:
         data["markets"]["path"] = str(resolve_path(config.markets.path, path.parent))
     return PipelineConfig.model_validate(data)
 
@@ -209,5 +218,5 @@ def load_inputs(config: PipelineConfig) -> tuple[TopicPolicy, MarketSnapshot | N
 
     policy = read_json_model(Path(config.policy_path), TopicPolicy)
     snapshot = (read_json_model(Path(config.markets.path), MarketSnapshot)
-                if config.markets.mode == "snapshot" else None)
+                if config.markets.mode in {"snapshot", "mock_api"} else None)
     return policy, snapshot

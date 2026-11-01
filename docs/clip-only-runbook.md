@@ -1,6 +1,6 @@
-# Clip-only pipeline: Phases A–C.1
+# Clip-only pipeline: Phases A–D
 
-Phase A provides contracts, preparation, checksums, and a single-worker lock. Phase B adds the Foundry text adapter, capability preflight, and enforced media profile. Phase C adds bounded source ingestion, reusable word transcripts, and captioned vertical rendering of an explicitly supplied span. Phase C.1 adds separate story files, ordered sequence manifests, optional 1.1× playback, and per-story resume. Topic selection, content auditing, approval, and Blob upload remain in later phases of the [implementation plan](architecture/clip-only-azure-implementation-plan.md). A successful manual render is an **unaudited checkpoint**, never approved content.
+Phase A provides contracts, preparation, checksums, and a single-worker lock. Phase B adds the Foundry text adapter, capability preflight, and enforced media profile. Phase C adds bounded source ingestion, reusable word transcripts, and captioned vertical rendering of an explicitly supplied span. Phase C.1 adds separate story files, ordered sequence manifests, optional 1.1× playback, and per-story resume. Phase D adds market-policy selection from reused source/transcript artifacts. Final content auditing, approval, and Blob upload remain in later phases of the [implementation plan](architecture/clip-only-azure-implementation-plan.md). A successful manual render is an **unaudited checkpoint**, never approved content.
 
 ## Setup
 
@@ -135,6 +135,52 @@ All artifact paths in the JSON are relative to the **run directory**, not the se
 
 Open the local preview to play stories independently and follow Previous/Next links. It exposes source spans, rates, provenance hashes and omitted intervals between stories; it escapes supplied text, loads no external scripts and never auto-approves. This is a pilot review page, not the consumer app's story feed. Pay particular attention to whether a viewer stopping after an earlier story would miss a qualification, and whether faster playback obscures numerical explanations.
 
+## Market-policy story selection (Phase D)
+
+Start with Phase C's typed `source.json` and `transcript.json`. Selection is a text-only checkpoint; it neither downloads media again nor starts a render. The current reference sample stays unchanged. For a different source, first acquire and transcribe it using the Phase C media workflow. End-to-end automatic approval remains outside this stage.
+
+```bash
+python -m clip_pipeline select --config /path/to/config.json \
+  --source-artifact /path/to/source.json --transcript /path/to/transcript.json
+
+python -m clip_pipeline resume --workspace /path/to/workspace \
+  --run-id '<selection-run-id>' --selection-only
+```
+
+`select --prepare-only` pins inputs without API/inference calls. The source and transcript must match exactly and contain valid word timing. A source artifact is provenance supplied by the operator; the renderer rechecks actual downloaded/local media bytes before rendering. The selector never fabricates word times.
+
+For the current pilot, copy `configs/clip-only.mock-tradexyz.example.json` and configure Foundry. Its explicit `mock_api` mode uses the [development TradeXYZ fixture](../configs/development/README.md), which includes 120 unique markets: 118 standard-index entries plus the Live pre-IPO ANT and OURA entries, retrieved on 2026-11-01. Converted pre-IPO entries remain in the standard set without duplication. It exercises the HTTP response/parser contract through an in-process transport, without opening a server or accepting arbitrary localhost URLs. This is development data, not the production Megastocks allowlist. `snapshot` remains an explicit offline alternative. Neither mode is a fallback from the production API.
+
+In `api` mode the provider makes bounded HTTPS requests with redirects and inherited proxies disabled, connect-time SSRF checks, a 2 MiB response cap, schema validation and at most three attempts for transport/429/5xx failures. It pins fetch time, payload hash, server version and ETag. Conditional 304 responses refresh freshness; transient failure may reuse only a valid cached snapshot within `max_cache_age_seconds`. Missing credentials, authentication failures, redirects, invalid schemas and stale caches fail explicitly. Unknown asset classes require correcting/reviewing the universe; they are never silently treated as equities. Approval-time refresh belongs to Phase E.
+
+The selector:
+
+1. Evaluates every overlapping transcript window in bounded batches, including negatives and ambiguous content. Default input windows are 45 seconds, with one segment of overlap and at most four windows per request. These do not define story boundaries.
+2. Uses the complete window map to expand surrounding context across batch boundaries and merge overlapping discussion regions. Regions exceeding the model context budget go to review; they are not truncated.
+3. Proposes complete chronological stories with exact source evidence, subject, market connection, attributed stance, freshness, and explicit reasons for gaps between stories. The model selects existing first/last segment IDs and evidence/context segment IDs; code resolves the exact observed first/last word times and source quotes. It does not ask the model to recreate timestamps or quotations for story proposals. Automatic selection retains 1.0× speed. Every matched market must have its underlying name or an explicit alias spoken in that window/story (legal suffixes may be omitted); lexical presence is necessary but does not by itself establish substantive relevance.
+4. Checks every policy rule for every story and sequence against original context. Required qualifications must stay in the same story when a viewer stopping there would otherwise be misled. A failed story withholds its entire sequence.
+5. Ranks all surviving complete sequences before global deduplication and count limits. Distinct arguments and opposing views should survive; necessary stories are never dropped to fit a budget. The emitted sequence order follows the source. Budget exclusions and review reasons remain in the report.
+
+The shipped policy includes standalone completion, chronology, entity disambiguation, stance attribution, ASR/numeric uncertainty and resistance to instructions embedded in source content. Unknown direction is `unclear`, not `neutral`; criticism alone is not a stock-price forecast. A macro-only discussion needs a spoken equity-market mechanism but no invented ticker association. ASR punctuation supplies an additional deterministic review signal: a cut starting or ending inside an ASR sentence is withheld for review even if the model marks it complete. Punctuation can be wrong and is not proof of semantic completion. Semantic checks are model judgments and remain subject to the independent final-media audit in E.
+
+The larger mock universe needs more input budget than the original tiny fixture. The development example uses a conservative 262,144-token accounting ceiling (UTF-8 bytes are counted as an upper bound, not actual billed tokens) and 12,000 reserved output tokens per request, including reasoning. The development example uses GPT-5-mini-compatible `reasoning_effort: "medium"`; the earlier minimal-reasoning preflight only established API capability, not editorial selection quality. Verify these settings against your deployment's context and throughput limits; neither input nor output is silently truncated. Per-run call/token limits include failed attempts. Reservations are committed **before** each network call, so interruption cannot reset the budget. A response is cached only after schema/evidence/coverage validation; explicit resume reuses validated calls and pinned inputs. A changed prompt, policy, market universe, configuration or transcript requires a new run. No final approval is reused.
+
+CLI output links `story_plan`, `selection_report` and a text-first `preview`. The report retains complete window decisions, all proposals, per-rule selection checks, global ranking, exclusions and uncertainty. The `foundry` plan binds source/transcript, policy, markets, prompts, settings and report hashes. The original C.1 manual-plan serialization stays compatible.
+
+- `checkpointed` at `selected`: a nonempty unaudited plan is ready for editorial inspection and optional `render-stories --plan ...` using the same source/transcript/settings.
+- `finished` / `completed_no_matches`: all source windows were evaluated and no complete eligible sequence remains. No render pool or filler clips are started.
+- `finished` / `needs_review` (exit 3): ambiguity or a context/budget limit prevents confidently completing selection. Proposed text remains visible in the report/preview; the emitted render plan is empty. This is never reported as no matches.
+- `retryable`: API/model/operational failure. Explicit `resume --selection-only` continues validated checkpoints under the original budget. Failed responses, refusals, missing IDs and malformed evidence cannot become empty success.
+
+This CLI does not run final-audio ASR, approve clips, upload Blob artifacts, or deploy the Azure worker. Stage-specific metadata remains in the selection report even when the compact C.1 render plan carries only the renderable story fields.
+
+Opt-in live prompt evaluation (paid Foundry calls, synthetic text only):
+
+```bash
+python tests/selection_live_smoke.py --config /path/to/config.json \
+  --output output/clip-pilot/editorial-smoke.json
+```
+
 ## Validate configuration
 
 ```bash
@@ -147,7 +193,7 @@ Relative workspace, policy, and market snapshot paths resolve against the **conf
 
 Unknown fields are errors. Fixed vertical geometry, a zero clip minimum, one worker, and manual review are enforced. Secrets may only be referenced by environment-variable name; do not put key values or credential-bearing URLs into JSON. In `api_key` auth mode, supply `api_key_env`; identity modes reject that field. Production endpoint details and user media/transcripts should stay outside committed examples.
 
-The API and development snapshot modes are explicit and mutually exclusive. There is no automatic fallback. API mode is **not fetched** during preparation. Snapshot mode validates the provided local list. `blob: null` supports local preparation; a real storage target will be required before live promotion is implemented.
+The API and development snapshot modes are explicit and mutually exclusive. There is no automatic fallback. API mode is **not fetched** during preparation; Phase D fetches and pins it when selection executes. Snapshot mode validates the provided local list. `blob: null` supports local preparation; a real storage target will be required before live promotion is implemented.
 
 ## Exercise the synthetic fixture
 

@@ -39,7 +39,7 @@ def validate_plan_transcript(plan, source, transcript, config):
     if digest(transcript) != plan.transcript_sha256:
         raise MediaError("story_transcript_hash_mismatch")
     segments = {s.segment_id: s for s in transcript.segments}
-    normal = lambda text: re.sub(r"\s+", " ", text).strip().casefold()
+    normal = lambda text: re.sub(r"\s+", "", text).casefold()
     for story in all_stories(plan):
         words = [w for s in transcript.segments for w in s.words
                  if w.end > story.span.start and w.start < story.span.end]

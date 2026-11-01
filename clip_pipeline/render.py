@@ -84,7 +84,7 @@ def render_one_clip(media_path: Path, source, transcript, request, config,
         audio_channels=info["audio_channels"], duration_seconds=info["duration"])
     atomic_write(directory / "final.json", json_bytes(result))
     atomic_write(directory / "render-report.json", json_bytes({
-        "selection_method": "manual", "approved": False, "audit_performed": False,
+        "selection_method": "supplied_story_plan" if is_story else "manual", "approved": False, "audit_performed": False,
         "playback_rate": rate,
         "source_quality_review": original["height"] < 1920 or original["width"] < 1080,
         "boundary_word_review": any(w.start < boundary < w.end for s in transcript.segments
