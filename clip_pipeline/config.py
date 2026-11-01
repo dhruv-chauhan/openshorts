@@ -90,6 +90,21 @@ class SelectionConfig(Contract):
         return self
 
 
+class StoriesConfig(Contract):
+    max_sequences: Annotated[int, Field(ge=1, le=100)] = 5
+    max_stories_per_sequence: Annotated[int, Field(ge=1, le=100)] = 5
+    max_story_seconds: Annotated[float, Field(gt=0, le=3600)] = 300.0
+    max_sequence_seconds: Annotated[float, Field(gt=0, le=14400)] = 900.0
+    preferred_sequence_min_seconds: Annotated[float, Field(ge=0)] = 60.0
+    preferred_sequence_max_seconds: Annotated[float, Field(gt=0)] = 180.0
+
+    @model_validator(mode="after")
+    def preferred_band(self):
+        if not self.preferred_sequence_min_seconds < self.preferred_sequence_max_seconds <= self.max_sequence_seconds:
+            raise ValueError("preferred sequence band must fit the hard sequence limit")
+        return self
+
+
 class MediaConfig(Contract):
     aspect_ratio: Literal["9:16"] = "9:16"
     width: Literal[1080] = 1080
@@ -159,6 +174,7 @@ class PipelineConfig(Contract):
     markets: Annotated[ApiMarkets | SnapshotMarkets, Field(discriminator="mode")]
     blob: BlobConfig | None = None
     selection: SelectionConfig = Field(default_factory=SelectionConfig)
+    stories: StoriesConfig = Field(default_factory=StoriesConfig)
     media: MediaConfig = Field(default_factory=MediaConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
     limits: LimitsConfig = Field(default_factory=LimitsConfig)

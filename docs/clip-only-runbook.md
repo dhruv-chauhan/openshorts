@@ -1,6 +1,6 @@
-# Clip-only pipeline: Phases A–C
+# Clip-only pipeline: Phases A–C.1
 
-Phase A provides contracts, preparation, checksums, and a single-worker lock. Phase B adds the Foundry text adapter, capability preflight, and enforced media profile. Phase C adds bounded source ingestion, reusable word transcripts, and captioned vertical rendering of an explicitly supplied span. Topic selection, content auditing, approval, and Blob upload remain in later phases of the [implementation plan](architecture/clip-only-azure-implementation-plan.md). A successful manual render is an **unaudited checkpoint**, never approved content.
+Phase A provides contracts, preparation, checksums, and a single-worker lock. Phase B adds the Foundry text adapter, capability preflight, and enforced media profile. Phase C adds bounded source ingestion, reusable word transcripts, and captioned vertical rendering of an explicitly supplied span. Phase C.1 adds separate story files, ordered sequence manifests, optional 1.1× playback, and per-story resume. Topic selection, content auditing, approval, and Blob upload remain in later phases of the [implementation plan](architecture/clip-only-azure-implementation-plan.md). A successful manual render is an **unaudited checkpoint**, never approved content.
 
 ## Setup
 
@@ -85,6 +85,55 @@ python -m clip_pipeline resume --workspace /path/to/workspace \
 Run resume in the same environment with the same mounted paths. It validates hashes and continues from the last committed stage after interruption. A completed manual checkpoint returns its existing output. Failed terminal runs are immutable: submit a new render, which can reuse valid source/transcript caches. Use a new run for changed boundaries/layout/captions/configuration; render caching across separate runs is not implemented yet.
 
 Source blobs are keyed by content hash; YouTube locator entries permit reusing the downloaded bytes. Local files are recopied/hashed so changed bytes at the same filename invalidate reuse. Transcript keys include source bytes, model-weight hashes, ASR settings and package versions, or the exact supplied-transcript hash. Changes to render settings or policy reuse compatible ASR. Checksums reject corrupted caches. YouTube cache entries intentionally retain the first acquired bytes: use a fresh workspace to reacquire an edited remote video. Source/model/transcript caches and unfinished stage files are retained until operator cleanup; there is no automatic retention job yet.
+
+## Manual story sequences (Phase C.1)
+
+`render-stories` renders an ordered manual plan as **separate video files**. It makes no Foundry request, topic decision, content audit, approval or upload. The existing `render --start/--end` command retains its Phase C behavior and limits.
+
+Start from `configs/story-plan.example.json`. Its URL, hashes, titles and boundaries are placeholders, not a runnable content sample. A real plan pins:
+
+- `source`: the same YouTube locator or existing local input used for source acquisition.
+- `source_sha256`: the exact ingested media hash from `source.json`.
+- `transcript_sha256`: the hash of the canonical `TranscriptArtifact` JSON. The pipeline's generated `transcript.json` already uses this representation; for an imported JSON file use `digest(read_json_model(path, TranscriptArtifact))`, not a hash of arbitrary formatting.
+- `sequences`: ordered groups with unique `sequence_id` and title; each contains one or more stories.
+- Each story's unique `story_id`, title, contiguous source `span`, editorial role and `playback_rate` (1.0 default; 1.1 also supported). Optional subject, market IDs, speaker, timeframe, stance, exact evidence and source context remain unaudited manual annotations. Unknown values should stay null/`unclear`.
+
+Use a Phase C run's source/transcript artifacts to author the first plan. Preserve the plan's source locator but use container paths for local files and configuration. A supplied transcript is optional; otherwise the configured ASR/cache must reproduce the pinned transcript. Changing ASR/model results requires reviewing and pinning the new transcript in a new plan.
+
+```bash
+python -m clip_pipeline render-stories \
+  --config /path/to/config.json --plan /path/to/story-plan.json \
+  --prepare-only
+
+python -m clip_pipeline render-stories \
+  --config /path/to/config.json --plan /path/to/story-plan.json \
+  --stop-after-stories 1
+
+python -m clip_pipeline resume --workspace /path/to/workspace \
+  --run-id '<returned-run-id>' --stories-only
+```
+
+The same commands work in `clip-worker` after mounting the inputs and persistent workspace. `--transcript` optionally supplies a reviewed contract file. `--prepare-only` creates an immutable run without media work; use `resume --stories-only` to execute that same prepared run. Without `--prepare-only` or `--stop-after-stories`, rendering continues through the whole plan. `--stop-after-stories N` pauses after N *newly rendered* stories, exits successfully, and writes no sequence index until all planned stories are complete. It is also supported on story resume.
+
+Plan/config validation happens before creating a run. Duplicate IDs, nonchronological/overlapping spans (including overlap across sequences), unsupported playback rates and hard budget violations are rejected. Actual source bounds/hash are checked after acquisition; transcript hash, evidence text/bounds and cuts inside timed words are checked before rendering. A manually supplied plan cannot prove sentence completeness, truthful attribution or market eligibility; these remain D/E checks and human review obligations.
+
+The `stories` configuration is independent of legacy `selection` duration settings. Defaults are five sequences, five stories per sequence, 300 seconds per story and 900 seconds per sequence as hard limits on expected delivered duration. The preferred total sequence range is 60–180 seconds, recorded as a review flag rather than enforced by trimming, padding or dropping stories. There is no duration floor for a story beyond a positive span; choose complete ideas, not a minimum number of seconds. Limits never truncate a story or remove context to make it fit.
+
+Every story uses its own output timeline: `(source_time - source_start) / playback_rate`. The renderer applies video timestamp and pitch-preserving audio tempo changes, retimes caption words and layout ranges, then burns captions. `timeline.json` records source/output word and evidence timestamps plus source-only context. Original source transcripts remain unchanged. Final media is independently decoded and checked against expected speed-adjusted duration. The image test also checks actual caption bounds and audio/video stream timing; these checks are not semantic audio audits.
+
+Story-run state differs deliberately from the older single-span command:
+
+- `story_progress` records each story's `pending`, `running`, `rendered`, `failed` or `interrupted` state, attempt count and committed artifact key.
+- Completed story files, metadata and progress are committed atomically. Killing/interruption during a later story leaves earlier commits reusable. SIGTERM/SIGINT terminate the active media process group; SIGKILL/container loss may leave uncommitted files, which are not checkpoints.
+- An operational error returns exit 4 with run state `retryable`. Explicit `resume --stories-only` retries unfinished stories. Interruptions return 130 and retain an `interrupted` run; an intentional `--stop-after-stories` pause returns 0. A corrupt committed file blocks resume instead of silently rerendering or approving it.
+- Resume uses only pinned config/plan/transcript inputs. Original files changed outside the run are ignored. Editing pinned files breaks checksums. Submit a **new run** for changed rates, spans, labels, membership or settings; broader cross-run render reuse is not implemented.
+- The final state is `checkpointed` at `rendered`, with `outcome: null` and `approved: false`. An empty manual plan produces an empty unaudited index, never `completed_no_matches`.
+
+Outputs include per-story `story.json`, clean/final media, ASS/SRT, layout and timeline sidecars; separate `sequence-*.json` files; an ordered `sequences-*.json` index; and a static `preview-*.html`. CLI/status JSON returns `sequence_index`, `preview` and story progress. There is intentionally no single `final_media` for a story run.
+
+All artifact paths in the JSON are relative to the **run directory**, not the sequence file's parent in a hypothetical relocated layout. Sequence manifests contain the exact ordered story specifications, artifact references/hashes, source/transcript/plan hashes and actual summed duration. They contain no delivery credentials or approval. The consuming backend can later resolve private artifact identifiers into authorized URLs after Phase E promotion.
+
+Open the local preview to play stories independently and follow Previous/Next links. It exposes source spans, rates, provenance hashes and omitted intervals between stories; it escapes supplied text, loads no external scripts and never auto-approves. This is a pilot review page, not the consumer app's story feed. Pay particular attention to whether a viewer stopping after an earlier story would miss a qualification, and whether faster playback obscures numerical explanations.
 
 ## Validate configuration
 
@@ -191,7 +240,7 @@ Successful command output is JSON on stdout. Runtime validation errors use JSON 
 python -m pytest tests/test_clip_pipeline_config.py \
   tests/test_clip_pipeline_artifacts.py tests/test_clip_pipeline_cli.py \
   tests/test_clip_pipeline_foundry.py tests/test_clip_pipeline_isolation.py \
-  tests/test_clip_pipeline_media.py -q
+  tests/test_clip_pipeline_media.py tests/test_clip_pipeline_stories.py -q
 ```
 
 The isolation test starts a fresh interpreter that blocks media/cloud/app imports and network connection/DNS operations. Other tests cover invalid configuration, source/evidence/timestamp contracts, pinned resume inputs, corruption, atomic write failure, lock contention and process death, and distinguishing preparation from completed output.
@@ -210,3 +259,5 @@ docker run --rm --platform linux/amd64 --network none --cpus 2 --memory 6g \
 Use a new `/data/smoke-*` directory for each invocation so the initial cache-miss assertion remains meaningful. `smoke-report.json` records real-model execution, absence of Google SDK, transcript reuse, same-filename source invalidation, verified resume, imported word timestamps, and GENERAL/full-width/portrait output checks. This passed locally, including visual inspection of a captioned frame. Generated speech/test-pattern footage does not establish face-tracking quality or content suitability on representative videos. `.github/workflows/clip-media.yml` runs this test for relevant PRs or manual dispatch; it does not make paid model calls.
 
 The first real YouTube sample also passed acquisition, full-source transcription, manual rendering and offline source/transcript reuse. Frame inspection confirmed speaker tracking, with inherited captions overlapping the broadcaster's lower third. That remains a visual-review/tuning item; technical success does not imply publishable output. The integration test and initial sample used `tiny` Whisper for speed; the configured baseline default remains `small`. No ASR accuracy or Azure throughput claim follows from these tests. Sample artifacts and diagnostics remain under ignored local output.
+
+Phase C.1 extends the same real image test with `tests/story_media_smoke.py`: two separate story files at 1.0×/1.1×, an operator checkpoint, SIGTERM during a real media worker, resume without changing the earlier file, caption/stream timing checks, and a changed-rate plan that starts with pending output. The result is saved under `stories/story-smoke-report.json` within the smoke directory.

@@ -9,3 +9,4 @@
 !fonts/**
 !tests/
 !tests/media_smoke.py
+!tests/story_media_smoke.py

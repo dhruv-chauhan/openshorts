@@ -219,6 +219,130 @@ class RuleResult(Contract):
     result: Literal["pass", "reject", "review"]
     reason: Text
 
+StoryId = Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")]
+PlaybackRate = Annotated[float, Field(ge=1.0, le=1.1)]
+
+
+class StorySpec(Contract):
+    story_id: StoryId
+    span: TimeSpan
+    title: Text
+    role: Literal["context", "claim", "explanation", "evidence", "qualification", "conclusion"] = "explanation"
+    playback_rate: PlaybackRate = 1.0
+    subject: Text | None = None
+    matched_market_ids: list[Text] = Field(default_factory=list)
+    speaker: Text | None = None
+    timeframe: Text | None = None
+    stance: Literal["bullish", "neutral", "bearish", "mixed", "unclear"] = "unclear"
+    evidence: list[Evidence] = Field(default_factory=list)
+    context: list[Evidence] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def story_shape(self):
+        if self.playback_rate not in (1.0, 1.1):
+            raise ValueError("supported story rates are 1.0 and 1.1")
+        if any(e.start < self.span.start or e.end > self.span.end for e in self.evidence):
+            raise ValueError("story evidence must be inside the story span")
+        if self.stance != "unclear" and (not self.evidence or not self.speaker or not self.subject):
+            raise ValueError("directional stance requires attributed subject and evidence")
+        if len(self.matched_market_ids) != len(set(self.matched_market_ids)):
+            raise ValueError("duplicate market IDs")
+        return self
+
+
+class StorySequence(Contract):
+    sequence_id: StoryId
+    title: Text
+    stories: list[StorySpec] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def source_order(self):
+        for before, after in zip(self.stories, self.stories[1:]):
+            if after.span.start < before.span.end:
+                raise ValueError("stories must be chronological and nonoverlapping")
+        return self
+
+
+class StoryPlan(Contract):
+    schema_version: Literal["1"] = "1"
+    selection_method: Literal["manual"] = "manual"
+    source: SourceInput
+    source_sha256: Sha256
+    transcript_sha256: Sha256
+    sequences: list[StorySequence] = Field(default_factory=list, max_length=100)
+    approved: Literal[False] = False
+
+    @model_validator(mode="after")
+    def identities(self):
+        if self.source.kind == "fixture":
+            raise ValueError("story rendering requires real media")
+        if len({s.sequence_id for s in self.sequences}) != len(self.sequences):
+            raise ValueError("duplicate sequence IDs")
+        stories = [story for sequence in self.sequences for story in sequence.stories]
+        if len({s.story_id for s in stories}) != len(stories):
+            raise ValueError("story IDs must be unique across the plan")
+        ordered = sorted(stories, key=lambda s: s.span.start)
+        if any(b.span.start < a.span.end for a, b in zip(ordered, ordered[1:])):
+            raise ValueError("source spans may not overlap across sequences")
+        return self
+
+
+class StoryArtifact(Contract):
+    schema_version: Literal["1"] = "1"
+    story: StorySpec
+    final: FinalArtifact
+    clean_media: ArtifactRef
+    layout_ranges: ArtifactRef
+    timeline: ArtifactRef
+    render_report: ArtifactRef
+    captions_srt: ArtifactRef | None = None
+    approved: Literal[False] = False
+    audit_performed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def identity_and_duration(self):
+        if self.final.clip_id != self.story.story_id or self.final.source_span != self.story.span:
+            raise ValueError("rendered story identity/span mismatch")
+        expected = (self.story.span.end - self.story.span.start) / self.story.playback_rate
+        if abs(self.final.duration_seconds - expected) > 0.2:
+            raise ValueError("story duration does not match playback rate")
+        return self
+
+
+class SequenceManifest(Contract):
+    schema_version: Literal["1"] = "1"
+    plan_sha256: Sha256
+    source_sha256: Sha256
+    transcript_sha256: Sha256
+    sequence: StorySequence
+    stories: list[StoryArtifact]
+    duration_seconds: Annotated[float, Field(gt=0)]
+    approved: Literal[False] = False
+    audit_performed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def complete_sequence(self):
+        if [s.story for s in self.stories] != self.sequence.stories:
+            raise ValueError("sequence must contain exactly its planned stories in order")
+        if any(s.final.source_sha256 != self.source_sha256 for s in self.stories):
+            raise ValueError("sequence source mismatch")
+        if abs(sum(s.final.duration_seconds for s in self.stories) - self.duration_seconds) > 0.001:
+            raise ValueError("sequence duration must sum actual story durations")
+        return self
+
+
+class StoryProgress(Contract):
+    state: Literal["pending", "running", "rendered", "failed", "interrupted"] = "pending"
+    attempts: Annotated[int, Field(ge=0)] = 0
+    reason_code: Text | None = None
+    artifact_key: Text | None = None
+
+    @model_validator(mode="after")
+    def artifact_state(self):
+        if (self.state == "rendered") != (self.artifact_key is not None):
+            raise ValueError("only rendered stories have a committed artifact")
+        return self
+
 
 class AuditResult(Contract):
     schema_version: Literal["1"] = "1"
@@ -316,15 +440,16 @@ class RunManifest(Contract):
     run_id: RunId
     created_at: AwareDatetime
     updated_at: AwareDatetime
-    execution_kind: Literal["preparation", "fixture", "manual_render"]
+    execution_kind: Literal["preparation", "fixture", "manual_render", "manual_stories"]
     source: SourceInput
     stage: Stage = "configured"
-    state: Literal["prepared", "running", "checkpointed", "finished"] = "prepared"
+    state: Literal["prepared", "running", "interrupted", "retryable", "checkpointed", "finished"] = "prepared"
     outcome: Outcome | None = None
     reason_code: Text = "phase_a_prepared"
     input_fingerprint: Sha256
     artifacts: dict[str, ArtifactRef]
     input_artifact_keys: list[Text] | None = None
+    story_progress: dict[StoryId, StoryProgress] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def state_consistency(self):
@@ -332,8 +457,15 @@ class RunManifest(Contract):
                 len(set(self.input_artifact_keys)) != len(self.input_artifact_keys) or
                 not set(self.input_artifact_keys).issubset(self.artifacts)):
             raise ValueError("input artifact keys must be unique and present")
-        if self.state == "checkpointed" and (self.execution_kind != "manual_render" or self.stage != "rendered"):
+        if self.state == "checkpointed" and (self.execution_kind not in {"manual_render", "manual_stories"} or self.stage != "rendered"):
             raise ValueError("only manual rendered output can stop at an unaudited checkpoint")
+        if (self.story_progress or self.state in {"interrupted", "retryable"}) and self.execution_kind != "manual_stories":
+            raise ValueError("story progress/retryable checkpoints require a story run")
+        if any(p.artifact_key not in self.artifacts for p in self.story_progress.values() if p.artifact_key):
+            raise ValueError("story progress references a missing artifact")
+        if self.execution_kind == "manual_stories" and self.state == "checkpointed" and any(
+                p.state != "rendered" for p in self.story_progress.values()):
+            raise ValueError("a sequence checkpoint requires all stories")
         if self.updated_at < self.created_at:
             raise ValueError("updated_at cannot precede created_at")
         if (self.state == "finished") != (self.outcome is not None):

@@ -8,13 +8,14 @@ import sys
 
 from .artifacts import atomic_write, json_bytes, read_json_model
 from .config import load_config
-from .contracts import ManualRenderRequest, SourceArtifact, SourceInput, TranscriptArtifact
+from .contracts import ManualRenderRequest, SourceArtifact, SourceInput, TranscriptArtifact, StoryPlan
 from .profile import activate_media_profile
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["ingest", "transcribe", "render"])
+    parser.add_argument("action", choices=["ingest", "transcribe", "render", "render-story"])
+    parser.add_argument("--story-id")
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
     for name in ("submission", "source", "media", "transcript", "request", "supplied"):
@@ -46,8 +47,17 @@ def main(argv=None):
                     files = {"transcript": directory / "transcript.json", "transcription": directory / "transcription.json"}
                 else:
                     from .render import render_one_clip
-                    files = render_one_clip(args.media, source, read_json_model(args.transcript, TranscriptArtifact),
-                        read_json_model(args.request, ManualRenderRequest), config, directory, args.config.parent)
+                    transcript = read_json_model(args.transcript, TranscriptArtifact)
+                    if args.action == "render-story":
+                        from .stories import all_stories, validate_plan_config, validate_plan_transcript
+                        plan = read_json_model(args.request, StoryPlan)
+                        validate_plan_config(plan, config)
+                        validate_plan_transcript(plan, source, transcript, config)
+                        request = next(s for s in all_stories(plan) if s.story_id == args.story_id)
+                    else:
+                        request = read_json_model(args.request, ManualRenderRequest)
+                    files = render_one_clip(args.media, source, transcript,
+                        request, config, directory, args.config.parent)
         atomic_write(directory / "result.json", json_bytes({k: str(p.resolve()) for k, p in files.items()}))
         return 0
     except Exception as exc:

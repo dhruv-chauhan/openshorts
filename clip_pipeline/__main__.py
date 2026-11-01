@@ -49,6 +49,12 @@ def parser():
     render.add_argument("--transcript", type=Path)
     render.add_argument("--start", type=float, required=True)
     render.add_argument("--end", type=float, required=True)
+    stories = commands.add_parser("render-stories", help="Render a pinned manual plan as separate ordered stories")
+    stories.add_argument("--config", type=Path, required=True)
+    stories.add_argument("--plan", type=Path, required=True)
+    stories.add_argument("--transcript", type=Path)
+    stories.add_argument("--prepare-only", action="store_true")
+    stories.add_argument("--stop-after-stories", type=int, help="Pause after N newly completed stories")
     for name in ("status", "resume"):
         command = commands.add_parser(name, help="Verify a saved run and its artifact checksums")
         command.add_argument("--workspace", type=Path, required=True)
@@ -57,6 +63,8 @@ def parser():
             modes = command.add_mutually_exclusive_group()
             modes.add_argument("--prepare-only", action="store_true")
             modes.add_argument("--render-only", action="store_true", help="Resume an explicit manual render")
+            modes.add_argument("--stories-only", action="store_true", help="Resume a pinned manual story plan")
+            command.add_argument("--stop-after-stories", type=int)
     return cli
 
 
@@ -67,6 +75,10 @@ def emit(value, *, error=False):
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
+        stop_after = getattr(args, "stop_after_stories", None)
+        if stop_after is not None and (stop_after < 1 or (
+                args.command == "resume" and not args.stories_only)):
+            raise ArtifactError("stop-after-stories requires a positive count and a story command")
         if args.command == "preflight":
             from .foundry import FoundryError, preflight
             config = load_config(args.config)
@@ -85,11 +97,21 @@ def main(argv=None) -> int:
                   "snapshot_version": snapshot.version if snapshot else None,
                   "remote_services_checked": False})
             return OK
-        if args.command in {"run", "resume"} and not args.prepare_only and not getattr(args, "render_only", False):
+        if (args.command in {"run", "resume"} and not args.prepare_only
+                and not getattr(args, "render_only", False) and not getattr(args, "stories_only", False)):
             emit({"error": "execution_not_implemented",
                   "message": "Use --prepare-only, render for an explicit span, or resume --render-only for a manual run."}, error=True)
             return UNAVAILABLE
-        if args.command == "render":
+        if args.command == "render-stories":
+            from .execution import execute_stories
+            manifest, directory = prepare_run(args.config, transcript_path=args.transcript, story_plan_path=args.plan)
+            if not args.prepare_only:
+                manifest = execute_stories(directory.parent.parent, manifest.run_id, stop_after_stories=stop_after)
+        elif args.command == "resume" and args.stories_only:
+            from .execution import execute_stories
+            manifest = execute_stories(args.workspace, args.run_id, stop_after_stories=stop_after)
+            directory = args.workspace.resolve() / "runs" / manifest.run_id
+        elif args.command == "render":
             from .execution import execute_manual
             source = (SourceInput(kind="youtube", locator=args.url) if args.url else
                       SourceInput(kind="local", locator=str(args.input)))
@@ -115,9 +137,12 @@ def main(argv=None) -> int:
               "execution_kind": manifest.execution_kind,
               "input_fingerprint": manifest.input_fingerprint,
               "approved": False,
+              "story_progress": {key: value.model_dump() for key, value in manifest.story_progress.items()},
+              "sequence_index": str(directory / manifest.artifacts["sequence_index"].path) if "sequence_index" in manifest.artifacts else None,
+              "preview": str(directory / manifest.artifacts["preview"].path) if "preview" in manifest.artifacts else None,
               "final_media": str(directory / manifest.artifacts["final_media"].path) if "final_media" in manifest.artifacts else None,
               "message": ("Manual render run; no topic selection, content audit, or approval performed."
-                          if manifest.execution_kind == "manual_render" else
+                          if manifest.execution_kind in {"manual_render", "manual_stories"} else
                           "Inputs prepared; no download, transcription, inference, render, or approval performed.")})
         return OUTCOME_EXIT_CODES.get(manifest.outcome, OK)
     except ValidationError as exc:

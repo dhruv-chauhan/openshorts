@@ -8,7 +8,7 @@ from uuid import uuid4
 from . import __version__
 from .artifacts import ArtifactError, ArtifactStore, atomic_write, digest, json_bytes, read_json_model
 from .config import PipelineConfig, load_config, load_inputs
-from .contracts import FixtureBundle, ManualRenderRequest, RunManifest, SourceInput, STAGES, TranscriptArtifact
+from .contracts import FixtureBundle, ManualRenderRequest, RunManifest, SourceInput, STAGES, TranscriptArtifact, StoryPlan, StoryProgress
 
 
 def transition(manifest: RunManifest, *, stage=None, outcome=None,
@@ -39,7 +39,8 @@ def transition(manifest: RunManifest, *, stage=None, outcome=None,
 def prepare_run(config_path: Path, source: SourceInput | None = None, *,
                 fixture_path: Path | None = None,
                 transcript_path: Path | None = None,
-                render_request: ManualRenderRequest | None = None) -> tuple[RunManifest, Path]:
+                render_request: ManualRenderRequest | None = None,
+                story_plan_path: Path | None = None) -> tuple[RunManifest, Path]:
     """Validate all input JSON before creating or locking a workspace.
 
     Media content is not opened, downloaded, or hashed here. Source binding and
@@ -47,6 +48,13 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
     """
     config = load_config(config_path)
     policy, snapshot = load_inputs(config)
+    plan = read_json_model(story_plan_path, StoryPlan) if story_plan_path is not None else None
+    if plan is not None:
+        from .stories import validate_plan_config
+        if source is not None or fixture_path is not None or render_request is not None:
+            raise ArtifactError("story plan supplies its own source")
+        validate_plan_config(plan, config)
+        source = plan.source
     if render_request is not None:
         duration = render_request.span.end - render_request.span.start
         if fixture_path or not config.selection.min_seconds <= duration <= config.selection.max_seconds:
@@ -76,6 +84,9 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
 
     transcript = (read_json_model(transcript_path, TranscriptArtifact)
                   if transcript_path is not None else None)
+    if plan is not None and transcript is not None and (
+            transcript.source_sha256 != plan.source_sha256 or digest(transcript) != plan.transcript_sha256):
+        raise ArtifactError("supplied transcript does not match story plan")
     # Secret values are never read. Config accepts only environment-variable
     # references and credential-free service URLs, including in saved snapshots.
     inputs = {"config": ("resolved-config.json", config),
@@ -90,6 +101,10 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
     if render_request is not None:
         inputs["render_request"] = ("render-request.json", render_request)
 
+    if plan is not None:
+        # Pin the resolved local locator alongside the canonical source request.
+        plan = plan.model_copy(update={"source": source})
+        inputs["story_plan"] = ("story-plan.json", plan)
     store = ArtifactStore(Path(config.workspace))
     with store.lock():
         run_id = uuid4().hex
@@ -101,11 +116,14 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
         manifest = RunManifest(
             implementation_version=__version__, run_id=run_id,
             created_at=now, updated_at=now,
-            execution_kind=("manual_render" if render_request is not None else
+            execution_kind=("manual_stories" if plan is not None else
+                            "manual_render" if render_request is not None else
                             "fixture" if fixture is not None else "preparation"),
             source=source, input_fingerprint=digest({k: v.sha256 for k, v in refs.items()}),
             artifacts=refs,
             input_artifact_keys=list(refs),
+            story_progress=({story.story_id: StoryProgress() for sequence in plan.sequences
+                             for story in sequence.stories} if plan is not None else {}),
         )
         # A run only becomes visible as prepared when all its snapshots exist.
         atomic_write(directory / "manifest.json", json_bytes(manifest))
@@ -124,6 +142,9 @@ def inspect_run(workspace: Path, run_id: str) -> RunManifest:
     config = read_json_model(store.run_dir(run_id) / manifest.artifacts["config"].path, PipelineConfig)
     if Path(config.workspace).resolve() != store.workspace:
         raise ArtifactError("run belongs to another workspace")
+    if manifest.execution_kind == "manual_stories":
+        from .stories import validate_story_checkpoint
+        validate_story_checkpoint(manifest, store.run_dir(run_id), config)
     return manifest
 
 

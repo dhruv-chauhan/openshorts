@@ -8,7 +8,7 @@ on:
       - 'Dockerfile.clip*'
       - 'requirements-clip-*.txt'
       - 'fonts/**'
-      - 'tests/media_smoke.py'
+      - 'tests/*media_smoke.py'
       - '*.py'
       - '.github/workflows/clip-media.yml'
 
@@ -31,4 +31,5 @@ jobs:
           name: clip-media-smoke
           path: |
             output/clip-media-smoke/smoke/smoke-report.json
+            output/clip-media-smoke/smoke/stories/story-smoke-report.json
             output/clip-media-smoke/smoke/workspace/runs/**/worker.log

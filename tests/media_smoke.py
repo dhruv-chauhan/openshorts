@@ -106,10 +106,12 @@ transcript = json.loads(first_artifact("transcript").read_text())
 transcript.update(source_sha256=file_hash(portrait), duration_seconds=probe(portrait)["duration"])
 supplied = root / "portrait-transcript.json"
 supplied.write_text(json.dumps(transcript))
-fourth, _, _ = render(portrait, supplied=supplied)
+fourth, fourth_artifact, _ = render(portrait, supplied=supplied)
+run([sys.executable, "/app/tests/story_media_smoke.py", config_path, portrait,
+     fourth_artifact("transcript"), root / "stories"])
 report = {"ok": True, "synthetic_source": True, "google_sdk_installed": False, "real_models": True,
           "javascript_runtime": run(["deno", "--version"]).strip(),
-          "asr_cache_reused": True, "changed_source_invalidated_asr": True,
+          "story_sequence_smoke_passed": True, "asr_cache_reused": True, "changed_source_invalidated_asr": True,
           "layouts": ["track_general", "preserve_full_width", "already_vertical"],
           "runs": [first, second, third, fourth]}
 (root / "smoke-report.json").write_text(json.dumps(report, indent=2) + "\n")

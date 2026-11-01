@@ -1,0 +1,39 @@
+{
+  "schema_version": "1",
+  "selection_method": "manual",
+  "source": {
+    "kind": "youtube",
+    "locator": "https://www.youtube.com/watch?v=abcdefghijk"
+  },
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "transcript_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "sequences": [
+    {
+      "sequence_id": "market-discussion",
+      "title": "Replace with a source-grounded discussion title",
+      "stories": [
+        {
+          "story_id": "context",
+          "title": "Replace with the first complete idea",
+          "role": "context",
+          "span": {
+            "start": 0.0,
+            "end": 35.0
+          },
+          "playback_rate": 1.0
+        },
+        {
+          "story_id": "explanation",
+          "title": "Replace with the next complete idea",
+          "role": "explanation",
+          "span": {
+            "start": 40.0,
+            "end": 105.0
+          },
+          "playback_rate": 1.1
+        }
+      ]
+    }
+  ],
+  "approved": false
+}

@@ -28,5 +28,5 @@ FROM runtime AS media-test
 RUN apt-get update && apt-get install -y --no-install-recommends espeak-ng \
     && rm -rf /var/lib/apt/lists/*
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8')"
-COPY tests/media_smoke.py /app/tests/media_smoke.py
+COPY tests/media_smoke.py tests/story_media_smoke.py /app/tests/
 ENTRYPOINT ["python", "/app/tests/media_smoke.py"]

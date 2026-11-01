@@ -2,11 +2,13 @@
 
 Date: 2026-11-01  
 Repository baseline reviewed: `459716b`  
-Status: Phases A–C implemented and locally validated; Phases D–F remain planned. Phase C completes the manual single-span media baseline, not content approval or visual acceptance. See the [clip-only runbook](../clip-only-runbook.md) for implemented commands and limitations.
+Status: Phases A–C.1 implemented and locally validated; Phase C committed and pushed as `ac14215`, C.1 changes remain local. The remaining order is **D → E → F**. C.1 adds separate story files, ordered sequence manifests, optional speed adjustment and per-story resume. Automatic story selection, semantic audits, approval and Azure worker deployment remain unimplemented. See the [clip-only runbook](../clip-only-runbook.md) for implemented commands and limitations.
 
 ## 1. Outcome and scope
 
-Build a manually triggered, single-video pipeline that runs on one Azure worker. It downloads a YouTube video or accepts a local source, produces or reuses a timestamped transcript, selects relevant moments using Microsoft Foundry, renders vertical clips, audits the rendered results, and stores approved artifacts in private Azure Blob Storage. Iterate on the same sample until the user is satisfied with the content and presentation.
+Build a manually triggered, single-video pipeline that runs on one Azure worker. It downloads a YouTube video or accepts a local source, produces or reuses a timestamped transcript, identifies complete relevant discussions using Microsoft Foundry, renders separate vertical story clips, audits each story and its sequence, and stores approved artifacts in private Azure Blob Storage. The consuming app presents the clips in order so viewers can stop after a complete idea or continue deeper. Iterate on the same sample until the user is satisfied with the content and presentation.
+
+The editorial objective is to preserve a market argument and its storyline while removing unrelated material, repetition and unnecessary setup. Each story is one contiguous source span with a natural beginning and local completion. A sequence groups related stories in source order; it is metadata over separate media files, not a concatenated video. Source gaps are explicit in provenance. App navigation between files does not by itself fix an abrupt cut or missing context; boundary and completeness checks remain required.
 
 The first milestone deliberately pulls topic rules, a final audit, and approved storage forward from the originally suggested second increment. Without them, a technically successful render would not establish that the output meets this use case.
 
@@ -19,7 +21,9 @@ The eventual workload is a configurable list of third-party channels and a daily
 - Two relevance paths: allowed underlying market/company OR equity-market macroeconomic relevance.
 - A backend API supplies the allowed-market list. A deliberately selected local snapshot supports development before the endpoint exists.
 - Zero qualifying clips is a normal successful outcome.
-- Independent audit of each final rendered clip; manual visual review during this narrow pilot.
+- One coherent market discussion per sequence; independent discussions become separate sequences. Preserve questions, claims, evidence, conditions, attribution and opposing views where needed for meaning.
+- Separate, independently addressable story files plus a versioned ordered sequence manifest for the consuming app. No stitched compilation, generated bridging narration, cross-video assembly or app implementation in this milestone.
+- Independent audit of each final rendered story and the ordered sequence; manual visual review during this narrow pilot.
 - Checkpoints and immutable run artifacts make iteration cheap and explainable.
 - One Azure VM running one containerized worker, with private Blob artifacts and managed identity.
 - Configuration separates topic policy, inference deployments, media settings, storage, and operational limits.
@@ -55,13 +59,13 @@ Manual CLI submission
   -> validate config + acquire run lock + resolve market snapshot
   -> ingest exact source + record provenance and media hash
   -> load validated transcript OR transcribe once
-  -> assess relevance across every transcript window
-  -> detail eligible windows -> snap boundaries -> deterministic validation
-  -> render candidates to staging
-  -> inspect media + transcribe final audio + independent semantic audit
+  -> assess every transcript window -> map complete discussions and context dependencies
+  -> propose ordered story sequences -> snap complete boundaries -> deterministic validation
+  -> render each contiguous story separately to staging, with optional modest speed adjustment
+  -> inspect media + transcribe final audio + audit each story and the sequence
   -> manual visual review for pilot
   -> revalidate market eligibility if changed
-  -> upload approved artifacts + write commit manifest
+  -> upload approved story artifacts + ordered sequence manifests + final commit manifest
 ```
 
 ### New package boundary
@@ -111,8 +115,10 @@ Store nonsecret settings in validated JSON, with secrets/identity supplied separ
 | Authentication | Managed identity on Azure; developer identity locally; explicit secret-backed key mode only if required |
 | Market source | `api` or explicit development `snapshot`; no silent switch between them |
 | Topic policy | Versioned policy file; separate from market membership |
-| Selection | Proposed initial 15–60 second clips, maximum five candidates, minimum zero; configurable context/token and candidate budgets |
-| Media | Fixed 9:16; target 1080x1920, H.264/AAC, square pixels; original audio; captions on; hook overlay off initially |
+| Selection | Complete discussions and ordered stories; zero eligible output allowed. Provisional preferred total viewing time 60–180 seconds per sequence, not per story and not a mandatory floor/ceiling. Story length follows local completion; configurable hard duration/count/compute limits route incomplete proposals to review or failure, never silent truncation. |
+| Story budgets | Separate maximum sequences, maximum stories per sequence, story/sequence duration limits and token budgets. Maximum five stories per sequence is an initial configurable review budget, not an instruction to drop necessary context. |
+| Media | Fixed 9:16; target 1080x1920, H.264/AAC, square pixels; separate contiguous story files; original audio; captions on; hook overlay off initially |
+| Pacing | Compare 1.0× with optional 1.1× playback in the pilot. Record the rate per story; maintain pitch and A/V sync. Default 1.0× until reviewed; do not accelerate dense numerical explanations or charts merely to meet a duration target. |
 | Layout | Local TRACK/GENERAL behavior; explicit reviewed preserve-full-width option; no automatic vision selection |
 | Concurrency | One job; one render at a time; CPU Whisper/x264 initially; GPU settings optional later |
 | Audit | Final-audio ASR + independent semantic check + deterministic media checks; manual visual approval required |
@@ -218,19 +224,23 @@ An eligible clip need not mention TradeXYZ or Megastocks. A platform mention doe
 8. Preserve currencies, units, percentages, price levels, reporting periods, and historical context. Ambiguous material numbers require review.
 9. Avoid duplicate/near-duplicate moments within the video; retain distinct arguments and opposing perspectives.
 10. No minimum clip count. Eligibility and completeness outrank hook strength and predicted popularity.
+11. Retain context even when it is less engaging. A necessary qualification cannot be deferred to a later story if the current story would mislead a viewer who stops watching. Never split a sentence, question/answer dependency or claim/condition solely to fit a duration target.
+12. Keep stories in original source order initially. Rank complete sequences for relevance/usefulness; do not rearrange statements within a sequence for a stronger hook. Do not make an answer appear to respond to a different question.
+13. Each story has a recognizable subject and a complete local idea. Later stories may add evidence or detail, but must not rely on unexplained pronouns or missing essential premises. Expand a contiguous span or omit/review it when context cannot be preserved; do not fabricate a bridge.
+14. Record stance as market + attributed speaker + timeframe + `bullish`, `neutral`, `bearish`, `mixed`, or `unclear`, supported by evidence. Missing directional information is `unclear`, not `neutral`. Criticism of a business or management is not automatically a stock-price forecast; preserve disagreement rather than inventing a consensus.
 
 Represent rules with stable IDs, severity (`reject` or `review`), rationale, and positive/negative examples. Keep thresholds configurable but do not treat self-reported model confidence as calibrated probability. Include freshness categories (`time_sensitive`, `evergreen`, `uncertain`) and source/event dates where established; unknown dates remain unknown.
 
 ### Selection algorithm
 
-1. Normalize transcript segments and word timestamps, assign stable segment IDs, and build overlapping windows using existing pure helpers.
-2. Evaluate every window in token-bounded batches for relevance path, market IDs, evidence spans, rule violations, clarity, completeness, and secondary hook potential. Adjacent context may resolve references, but the eventual clip must carry necessary context itself.
-3. Validate complete window coverage, valid market IDs, and evidence that actually maps to transcript text. Missing responses trigger explicit recovery/failure, not negative classification.
-4. Filter ineligible windows before ranking. Permit zero survivors. Never use the legacy first-window fallback.
-5. Detail eligible windows in configurable batches with zero-to-maximum output and stable candidate IDs. Review the whole transcript before applying a candidate budget; disclose budget-limited coverage. Avoid inheriting the legacy fixed ten-window global ceiling.
-6. Snap boundaries onto actual word timestamps. Validate finite numeric bounds, source duration, allowed duration, window/context bounds, and evidence containment after snapping.
-7. Recheck the final selected span and its necessary context against policy. Deduplicate overlap and repeated arguments, rank survivors, and apply the configured maximum. Do not refill a minimum after rejection.
-8. Generate only needed copy: an attributable title and optional hook. No unused platform descriptions or engagement CTAs are required in the new contract.
+1. Normalize transcript segments and word timestamps, assign stable IDs, and evaluate all overlapping windows in bounded batches. Windows are model input units, not final story boundaries.
+2. Map complete discussions across windows: subject/markets, attributed speakers, questions, claims, evidence, qualifications, conclusions, timestamps and context dependencies. Reconcile adjacent-window duplicates before proposing stories.
+3. Validate complete coverage, allowed market IDs and exact evidence references. Missing responses are operational errors, not negative relevance decisions. Review the full source before applying output budgets.
+4. Group eligible discussions by coherent thesis into sequence proposals. Preserve necessary supporting context even where a sentence alone scores low for engagement/relevance. Remove tangents, promotions and repetition without losing conditions or counterarguments. Permit zero proposals.
+5. Propose an ordered list of contiguous source spans per sequence. Each span must reach local completion; stories remain in source order. Retain source intervals omitted between stories and reasons for omission so the auditor can inspect them. No legacy first-window fallback or fixed ten-window shortlist.
+6. Snap to observed word boundaries, then validate sentence/idea completion, finite source bounds, evidence containment, nonoverlap, source order and configured budgets. Respect grouped-word timing warnings. If context requires expanding a span, revalidate it; if a hard limit prevents completeness, split only at a genuine idea boundary or route to review.
+7. Check the sequence as a whole and each story on its own for essential context, truthful stance attribution, useful progression and nonredundancy. Rank whole sequences; do not discard a necessary story to fill a count/duration budget. Label budget-limited coverage and never refill a minimum after rejection.
+8. Emit the C.1 typed story plan with evidence-backed titles/market labels and optional hooks. Editorial roles may include context, claim, explanation, evidence, qualification or conclusion; do not force every discussion into every role. Supporting app labels cannot replace a missing spoken qualification. No platform descriptions, engagement CTAs or generated narration are needed.
 
 ## 7. Transcript and media reuse
 
@@ -242,10 +252,13 @@ Use content hashes rather than filename/duration alone for cache identity. Keep 
 
 - Transcript: source media hash + ASR configuration/version.
 - Selection: transcript hash + market snapshot + policy/prompt/schema versions + deployment configuration.
-- Render: source hash + clip boundaries + caption/hook text + render settings/code version.
-- Audit: exact final media hash + source context + audit policy/prompt/model configuration.
+- Story render: source hash + contiguous span + playback rate + caption/hook text + render settings/code version. Sequence order is not baked into the media.
+- Sequence: ordered story IDs/final hashes + labels + topic/stance/context metadata + policy/schema versions.
+- Audit: exact story media hashes and sequence manifest hash + source context/omitted intervals + audit policy/prompt/model configuration.
 
 A policy change can reuse source/ASR but invalidates selection and subsequent approval. A caption or hook change invalidates final audit even if boundaries are unchanged. An audit-only change reuses rendered candidates. A resume validates checksums; incomplete files never count as checkpoints.
+
+A changed playback rate invalidates that story's captions, render and audit. Changing order, membership or app-visible labels invalidates sequence audit/review/approval even if the story bytes are unchanged; compatible story media may be reused. C.1 adds compatible per-story resume/reuse, while broader cross-run render caching remains a later optimization. No change may reuse an old sequence approval.
 
 Persist artifacts with atomic local writes and stage manifests. Retain source and transcript across successful sample iterations until explicitly cleaned; do not inherit the legacy successful-run checkpoint deletion. Proposed development defaults: checkpoint/source retention seven days, rejected render retention one day, approved retention explicitly configured with no automatic deletion initially. These are editable operational defaults, not user-mandated retention policy.
 
@@ -255,6 +268,10 @@ Extract `render_one_clip` from the current nested render loop into a reusable op
 
 Preserve existing FFmpeg cuts, local tracking, caption styling/font handling, and fallback behavior. Normalize the final output to 1080x1920 with square pixels in this profile, including already-vertical passthrough sources. Upscaling does not create source detail; flag weak source quality for review. Preserve original audio and A/V sync. Keep captions editable through sidecar artifacts.
 
+In C.1, call the single-span seam for each planned story and retain separate clean/final files and sidecars. Do not concatenate spans, add artificial transitions, or join separate statements inside a story. Emit a sequence manifest for app navigation. Initial ordering is chronological; any later reordering feature needs an explicit policy change and new sequence audit.
+
+If a story uses playback rate `r`, its expected duration is `(source_end - source_start) / r`, within an explicit encoding tolerance, and its local timeline maps source time `t` to `(t - source_start) / r`. Apply this consistently to audio/video, ASS/SRT events, layout ranges and evidence/review timestamps. Burn captions after retiming; preserve the original source-clock transcript for reuse. Pitch-preserving tempo adjustment uses the original voice and requires no dubbing service. Test 1.0× and 1.1× against comprehension, numbers, pitch, sync and readable captions. Do not treat file-to-file navigation as evidence that starts/ends sound natural.
+
 Charts, multiple speakers, persistent news tickers, or burned-in captions may need a preserve-full-width layout or disabled added captions. Record manual layout/caption decisions in config. Do not automatically crop away market information using a face-only assumption. Do not add visual-model migration until the single sample demonstrates a concrete need.
 
 ## 8. Audit and pilot review
@@ -262,6 +279,8 @@ Charts, multiple speakers, persistent news tickers, or burned-in captions may ne
 ### Deterministic checks
 
 After rendering, use `ffprobe` and decode checks to verify dimensions, sample/display aspect ratio, codecs, nonempty video/audio streams, decodability, finite duration, and expected duration within an explicit frame/time tolerance. Check timestamp mapping, configured duration band, caption event bounds, and final artifact hashes. Silence/clipping indicators can flag review; the mere presence of an audio stream does not establish intelligibility.
+
+For story sequences, also verify unique IDs, increasing nonoverlapping source spans, one contiguous span per story, all manifest references/hashes, explicit playback rates, retimed evidence/captions and total duration from actual output files. Missing or failed story files prevent publishing the planned sequence.
 
 ### Independent content audit
 
@@ -277,11 +296,15 @@ Return typed per-rule results, supporting spans, attribution/number/context issu
 
 Any critical rule failure rejects the clip. An unresolved material ambiguity routes to review. Transient audit failure remains operational failure and must not approve or reject on the merits.
 
+Audit the ordered sequence separately using the relevant full discussion, omitted source intervals, retained stories, app-visible labels and proposed stance evidence. Check that omission/order does not change meaning, hide disagreement, or postpone a material qualification past the point where a viewer may stop. Each story must pass its own audit; all passing stories do not automatically imply a passing sequence. If a story fails, withhold the sequence. Removing or replacing it creates a revised sequence that must be re-audited and reviewed; never silently close the gap. Stance tags are descriptions of attributed source views, not externally verified investment conclusions.
+
 ### Manual visual review is part of baseline acceptance
 
 Generate a local static HTML report with relative video previews, source timestamps, selected text/context, rule outcomes, caption/hook copy, and before/after run comparison. Use escaped text, no external scripts, and no embedded production tokens. Generate review JSON with explicit clip IDs and final hashes.
 
 For every clip approved during the pilot, inspect the full clip for framing, chart readability, duplicate/broken captions, face obstruction, audio quality, A/V sync, natural start/end, and preserved context. Record reviewer decision/time and artifact hash. Automatic semantic pass alone is insufficient while `require_manual_review=true`.
+
+The review report must support playing each story alone and stepping through the ordered sequence, with source timestamps, omitted intervals and playback rate visible. Inspect caption overlap with broadcast banners and comprehension after speed adjustment. Bind sequence approval to the exact ordered manifest and its story hashes. This is a local review interface and app handoff contract; implementing the consumer app's story player/navigation remains outside this repository's baseline.
 
 A reviewer may resolve genuine ambiguity with evidence or reject a clip. Hard failures require a corrected render/policy decision and another audit; a generic review command must not bypass them. Later disabling manual review is a deliberate configuration/product decision after evaluation, not an automatic consequence of one good sample.
 
@@ -308,18 +331,24 @@ runs/<run-id>/resolved-config.json
 runs/<run-id>/market-snapshot.json
 runs/<run-id>/transcript.json
 runs/<run-id>/selection.json
+runs/<run-id>/story-plan.json
+runs/<run-id>/sequences/<sequence-id>.json
 runs/<run-id>/audits/<clip-id>.json
+runs/<run-id>/audits/sequences/<sequence-id>.json
 runs/<run-id>/review.json
 runs/<run-id>/report.html
 staging/<run-id>/<clip-id>/...
 approved/<source-id>/<run-id>/<clip-id>/clip.mp4
 approved/<source-id>/<run-id>/<clip-id>/provenance.json
+approved/<source-id>/<run-id>/sequences/<sequence-id>.json
 approved/<source-id>/<run-id>/commit.json
 ```
 
 Local workspaces additionally retain source media and caches. Upload checkpoint artifacts after stages; source upload is an explicit optional retention setting. On VM loss, recover available checkpoints and re-acquire any source not backed up, verifying its hash before reuse.
 
 Upload approved media and provenance first, verify lengths/checksums, then write the commit manifest last. Blob multi-object upload is not a transaction: consumers must discover approved items only through commit manifests, never by listing raw media prefixes. A retry uses deterministic keys and checksums; interrupted uploads cannot appear as completed output. Local atomic manifests plus this commit convention are enough for one worker; distributed coordination is deferred.
+
+The approved sequence manifest lists the exact ordered approved story IDs, artifact keys/hashes, actual durations, playback rates, source spans, titles, market labels and attribution/stance metadata. It contains private artifact identifiers, not embedded credentials or expiring signed URLs. The consuming backend resolves authorized delivery URLs separately. Final commit manifests reference sequence manifests by hash; neither an incomplete sequence nor an individually rejected story can be exposed through an approved sequence. Unaffected complete sequences may be committed only with explicit per-sequence results; unresolved technical failures still produce `partial_failure` for the run.
 
 Record source URL/channel/video identifiers, publication date, source timestamps, title/speaker attribution when known, market matches, snapshot/policy/model versions, media hashes, audit and review decisions. Track third-party source permission/licensing status separately; adding a channel or passing a topic audit does not assert ownership. Never blanket-populate the legacy rights acknowledgment.
 
@@ -335,11 +364,13 @@ Paths are proposed additions unless marked existing. Keep application changes li
 | `clip_pipeline/artifacts.py` | Local atomic manifests, checksums, cache invalidation, artifact identities. |
 | `clip_pipeline/markets.py` | Backend fetch/auth boundary, snapshot validation/cache, final eligibility refresh. |
 | `clip_pipeline/selection.py` | Topic gates, batched detail extraction, zero-count semantics, evidence checks, candidate ranking. |
+| `clip_pipeline/stories.py` (C.1) | Typed manual story-plan validation, chronological sequence manifests, context/identity references and mapping between source and per-story output timelines; no concatenation. |
 | `clip_pipeline/audit.py` | Final-audio/source comparison, independent Foundry audit, deterministic media checks, approval rules. |
 | `clip_pipeline/execution.py`, `clip_pipeline/media_worker.py`, `clip_pipeline/media_common.py` | Sequential controller, isolated media subprocesses, bounded execution, atomic checkpoints and deterministic media checks. |
 | `clip_pipeline/ingest.py`, `clip_pipeline/transcript.py`, `clip_pipeline/render.py` | Bounded source acquisition, source-bound ASR/import/cache, and reusable single-clip render operation; final-audio audit follows in E. |
 | `clip_pipeline/storage.py` | Private Blob uploads, checkpoint persistence, idempotent final commit manifests. |
 | `clip_pipeline/report.py` | Escaped static review report, comparison view, review decision validation. |
+| `tests/test_clip_pipeline_stories.py`, `tests/media_smoke.py` (C.1) | Ordered separate outputs, rate/timing mappings, incomplete sequence recovery, approval invalidation and real-media sequence tests. |
 | `configs/clip-only.example.json` | Nonsecret worker/provider/media/storage settings with placeholders. |
 | `configs/market-policy.example.json` | Versioned topic/editorial policy, thresholds and review rules; no real backend list duplicated here. |
 | `clip_pipeline/prompts/relevance.txt`, `selection.txt`, `audit.txt` | Versioned Foundry prompts. Include as runtime assets in the image; separate trusted policy from transcript data. |
@@ -401,7 +432,7 @@ Exit: mocked provider tests pass; a real Azure smoke request returns schema-vali
 
 ### C. Source, transcript reuse, and rendering seam
 
-Implemented locally: `render --start/--end` and `resume --render-only`, guarded direct YouTube/local ingestion, source hashing and provenance, validated word-transcript import, content/model/settings-keyed ASR reuse, isolated stage subprocesses, and `render_one_clip`. The seam composes the existing cutter, renderer and caption helpers without changing the legacy render loop. Clean/final paths and caption/layout sidecars are distinct; output is normalized and fully decoded to check 1080×1920 square-pixel H.264/AAC delivery. A completed manual render remains an unaudited `checkpointed` run, never an approved result. Sparse/no-audio sources fail explicitly in this manual path; selection outcomes follow in D.
+Implemented and committed in `ac14215`: `render --start/--end` and `resume --render-only`, guarded direct YouTube/local ingestion, source hashing and provenance, validated word-transcript import, content/model/settings-keyed ASR reuse, isolated stage subprocesses, and `render_one_clip`. The seam composes the existing cutter, renderer and caption helpers without changing the legacy render loop. Clean/final paths and caption/layout sidecars are distinct; output is normalized and fully decoded to check 1080×1920 square-pixel H.264/AAC delivery. A completed manual render remains an unaudited `checkpointed` run, never an approved result. Sparse/no-audio sources fail explicitly in this manual path; selection outcomes follow in D.
 
 `Dockerfile.clip`, the media requirements and `tests/media_smoke.py` close the pending real-image test without Google SDK: actual model imports, speech ASR, caption rendering, unchanged-source reuse, same-name changed-source invalidation, full-width and portrait input, and checkpoint resume passed locally with networking disabled. No heavyweight modules were mocked in this test. Lightweight controller/cache/error tests also pass. Automated content audit, final-audio ASR, acceptance of sample aesthetics, remote cache refresh, retention cleanup and cross-run render caching remain later work. See the [runbook](../clip-only-runbook.md) for commands and boundaries.
 
@@ -416,21 +447,43 @@ A real YouTube sample was acquired and transcribed in full, then manually render
 
 Exit: a manually specified span produces a playable captioned vertical clip. Repeating with unchanged source/ASR reuses the transcript. Changing the source invalidates it. No dubbing, Google, social, S3, or full app startup occurs.
 
-### D. Market policy and topic-aware selection
+### C.1. Story-sequence extension before Phase D
+
+Implemented locally; replaces the previously discussed concatenated-video "assembly extension" with **logical sequencing of separate story clips**. Phase C's original exit criteria remain complete. The consumer app is outside this repository change.
+
+1. Add versioned `StoryPlan`, `StorySpec`, `StoryArtifact` and `SequenceManifest` contracts. A plan pins source/transcript hashes and has zero or more coherent sequences. A story has a stable ID, one source span, editorial role, title, source-grounded subject/market and speaker/timeframe references, optional evidence-backed stance, playback rate and context/evidence references. A rendered sequence adds ordered artifact references/hashes and actual durations. Unknown speaker/timeframe/stance stays explicitly unknown; manual plans need not invent topic decisions that D has not performed.
+2. Separate preferred sequence viewing time, hard story/sequence limits, story/sequence count budgets and playback settings from the legacy clip-duration defaults. Use the proposed 60–180-second total sequence target as a soft preference, not a mandate to stretch sparse content or omit necessary context. Begin with source ordering, one video, zero minimum output, 1.0× default and optional reviewed 1.1×; retain the existing single-span CLI for compatibility.
+3. Add an explicit manual command such as `render-stories --config ... --plan ...` with validation before media/model work. Reject duplicate IDs, reversed/overlapping spans, nonchronological order, mismatched source hashes and unsupported rates. Check actual media bounds after ingest. Full topic eligibility and semantic completeness remain D/E gates, not properties inferred from a manual plan.
+4. Reuse C's source and transcript. Render one story at a time to separate files with optional pitch-preserving speed adjustment and correctly retimed captions/layout/evidence. No cross-span joins or synthetic speech. Publish each local story checkpoint atomically, then the local sequence manifest only after all required files validate; manual sequence outputs remain unaudited and unapproved.
+5. Extend the runner, CLI status and worker protocol for explicit per-story progress and resume. Interrupt during a later story and reuse previously verified completed stories on resume. Preserve the intended order and failed-story status; no missing story may be silently dropped. Rate/span/config changes invalidate affected output; sequence changes invalidate sequence approval.
+6. Provide a minimal local preview for independently playing stories and moving through their order, plus JSON for eventual app integration. Include source spans, rates, hashes and unaudited status. Define app consumption fields without adding public API endpoints, feed logic or the consumer UI.
+7. Test a manually reviewed sequence from the selected video at 1.0× and optional 1.1×. Add synthetic boundary/context fixtures and a real image test without Google SDK covering separate outputs, captions/sync, exact geometry, cached transcript reuse, sequence order, interruption and rate-change invalidation. Carry the known lower-third caption overlap into visual review; do not claim acceptance solely from decoding checks.
+
+Files: extend `contracts.py`, `config.py`, `__main__.py`, `execution.py`, `media_worker.py`, `render.py` and artifact/resume handling; add `stories.py` and focused tests. Add the minimal preview through `report.py` or a small reusable precursor, and update the example configuration, runbook and media-image test. Preserve A–C compatibility or explicitly version/migrate artifact schemas when needed.
+
+Implementation details: `render-stories --config ... --plan ...` and `resume --workspace ... --run-id ... --stories-only` operate on pinned manual plans. Optional `--stop-after-stories N` pauses after N newly completed stories. The separate `stories` configuration defaults to five sequences, five stories per sequence, 300 seconds per story and 900 seconds per sequence; 60–180 seconds is a soft sequence preference. Supported playback rates are exactly 1.0 and 1.1. Source/transcript hashes, word boundaries, evidence, artifact checksums and ordering are validated. Story outputs include clean/final media, captions, layout ranges and source/output timeline mappings; completed sequences expose typed JSON and an escaped local HTML preview. Retryable failures and interruptions preserve completed story checkpoints. Changed plans/settings require a new run; cross-run render caching is deferred. Empty manual plans remain unaudited rather than claiming no relevant matches.
+
+Validation: 1,584 backend tests passed, 57 skipped; the isolated environment without Google SDK passed 124 tests with one legacy compatibility test skipped. The offline media-image test rendered separate files at both rates, checked geometry/caption bounds/audio-video timing, interrupted a real later-story worker with SIGTERM, resumed without changing the completed story, and verified rate changes create fresh pending work. The story seam bounds normalization to the requested speed-adjusted duration to remove duplicate tail frames produced by legacy scene concatenation. Legacy single-span behavior is unchanged. These checks establish media/control behavior, not semantic content approval or acceptance of transcript quality.
+
+Selected-video validation: the same requested sample produced two independently playable stories, 37.338 seconds at 1.1× and 82.416 seconds at 1.0×, in an ordered sequence totaling 119.754 seconds. Both source and transcript were cache hits. Pausing after the first story and resuming preserved its bytes, modification time and attempt count. Both files passed media/timing/caption-bound checks. Inspected frames with `preserve_full_width` keep the original broadcast banner and place added captions below it. The reused tiny-model transcript still contains ASR errors and grouped-word timing warnings; user review of pacing, completeness and caption quality remains necessary. Ignored local `output/clip-media-smoke/phase-c1-validation.json` records exact artifact locations and test evidence; source media, transcript and real plan are not committed.
+
+Exit: a manually authored plan produces multiple independently playable captioned 9:16 files plus an ordered, hash-bound, unaudited sequence manifest; source/ASR are reused; speed and caption mappings are correct; interrupted later stories resume without discarding verified earlier outputs. The sequence can be inspected one story at a time. **No concatenated video is produced.** This establishes the contract that Foundry selection will populate in D; content approval remains E.
+
+### D. Market policy and topic-aware story selection
 
 1. Implement API/snapshot provider and policy prompts/schemas.
-2. Classify all windows, validate evidence/IDs, detail eligible batches, snap and revalidate.
-3. Implement zero-match outcomes, bounded candidate budgets, and within-video deduplication.
+2. Classify all windows, reconstruct complete discussions across batches, and generate C.1 story plans with source-grounded subject/stance/context metadata. Validate evidence/IDs, contiguous spans, complete boundaries and chronological progression.
+3. Implement zero-match outcomes, bounded sequence/story budgets and within-video deduplication without deleting necessary context. Preserve qualifications even when they are less engaging; do not force directional sentiment or short durations.
 
-Exit: synthetic positive, negative, macro-only, ambiguous-name, and adversarial transcript cases behave correctly. A valid no-match run terminates without constructing an empty render pool or retrying to manufacture clips. Legacy floor tests still pass.
+Exit: synthetic positive, negative, macro-only, ambiguous-name, mixed/unclear stance and adversarial transcript cases behave correctly. Context crosses input-window boundaries without loss; question/answer and claim/qualification cases produce complete chronological stories. A valid no-match run emits no sequences and terminates without an empty render pool or manufactured clips. Legacy floor tests still pass.
 
 ### E. Final audit, review, and storage
 
-1. Add media checks and final-audio ASR, semantic audit, and typed decision results.
-2. Produce review report and hash-bound reviewer decisions.
-3. Add Blob storage and final commit manifests, including approval-time market refresh.
+1. Add media checks and final-audio ASR per story, independent story/sequence semantic audits, omitted-context checks and typed decision results.
+2. Produce independent-story and sequential previews with hash-bound story and sequence reviewer decisions.
+3. Add Blob storage and approved ordered sequence manifests, final commit manifests and approval-time market refresh. A removed/changed story triggers sequence re-audit before promotion.
 
-Exit: no unreviewed/rejected/failed candidate enters the approved index. Changing final bytes invalidates approval. Upload interruption/retry cannot publish an incomplete run. Audit failure cannot become `completed_no_matches`.
+Exit: no unreviewed/rejected/failed story or sequence enters the approved index. Changing final bytes, order, membership or displayed metadata invalidates the corresponding approval. Upload interruption/retry cannot publish an incomplete sequence. Audit failure cannot become `completed_no_matches`.
 
 ### F. One Azure worker and sample iteration
 
@@ -453,6 +506,8 @@ Add focused tests such as:
 - `tests/test_topic_selection.py`: substantive versus incidental mentions, evidence verification, macro without ticker, generic politics, opinions/advice, full window coverage, zero output, no first-window fallback, snapping and dedupe.
 - `tests/test_clip_pipeline_artifacts.py`: cache keys, same-name different-source invalidation, interrupted writes, policy/prompt/model changes, resume versus rerun.
 - `tests/test_clip_audit.py`: altered numbers, lost qualifiers/context, ASR disagreement, stale-event presentation, hard-fail/nonbypassable review.
+- `tests/test_clip_pipeline_stories.py`: contiguous separate outputs, chronology, duplicate/missing stories, source-to-output timing at 1.0×/1.1×, natural boundary fixtures, per-story resume and rate/config invalidation.
+- Selection/audit sequence cases: an engaging claim with a quiet caveat, essential context in an earlier input window, a viewer stopping before a later qualification, opposing speakers, company criticism without a price view, unrelated discussion separation, and removing a rejected middle story. Assert explicit review/rejection where meaning cannot be preserved.
 - `tests/test_clip_pipeline_storage.py`: only approved hashes committed, upload failure, retry/idempotency, no partial manifest publication.
 - `tests/test_clip_only_imports.py`: baseline path imports without Google/full app; disabled features stay disabled with sentinel keys present.
 

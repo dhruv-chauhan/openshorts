@@ -23,5 +23,13 @@
     "account_url": "https://YOUR-STORAGE.blob.core.windows.net",
     "runs_container": "clip-runs",
     "approved_container": "approved-clips"
+  },
+  "stories": {
+    "max_sequences": 5,
+    "max_stories_per_sequence": 5,
+    "max_story_seconds": 300.0,
+    "max_sequence_seconds": 900.0,
+    "preferred_sequence_min_seconds": 60.0,
+    "preferred_sequence_max_seconds": 180.0
   }
 }
