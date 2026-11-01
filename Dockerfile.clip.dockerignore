@@ -1,0 +1,11 @@
+**
+!*.py
+!requirements-clip-*.txt
+!clip_pipeline/
+!clip_pipeline/**
+!configs/
+!configs/*.json
+!fonts/
+!fonts/**
+!tests/
+!tests/media_smoke.py

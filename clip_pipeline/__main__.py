@@ -1,4 +1,4 @@
-"""Run preparation and explicit Foundry capability preflight."""
+"""Preparation, Foundry capability preflight, and unaudited manual rendering."""
 from __future__ import annotations
 
 import argparse
@@ -10,7 +10,8 @@ from pydantic import ValidationError
 
 from .artifacts import ArtifactError, WorkspaceBusy
 from .config import load_config, load_inputs
-from .contracts import SourceInput
+from .contracts import ManualRenderRequest, SourceInput, TimeSpan
+from .media_common import MediaError
 from .runner import inspect_run, prepare_run, resume_preparation
 
 # Public CLI codes; preparation succeeds without claiming clip completion.
@@ -26,26 +27,36 @@ OUTCOME_EXIT_CODES = {"completed": OK, "completed_no_matches": OK,
 
 
 def parser():
-    cli = argparse.ArgumentParser(description="Clip-only pipeline: preparation and Foundry preflight")
+    cli = argparse.ArgumentParser(description="Clip-only pipeline: prepare, preflight, and render manual spans")
     commands = cli.add_subparsers(dest="command", required=True)
     validate = commands.add_parser("validate", help="Validate config and local policy/snapshot without IO to services")
     validate.add_argument("--config", type=Path, required=True)
     preflight = commands.add_parser("preflight", help="Make a small paid Foundry request per deployment")
     preflight.add_argument("--config", type=Path, required=True)
-    run = commands.add_parser("run", help="Prepare a run; media/model execution is not implemented yet")
+    run = commands.add_parser("run", help="Prepare inputs; automatic topic selection is not implemented yet")
     run.add_argument("--config", type=Path, required=True)
     source = run.add_mutually_exclusive_group(required=True)
     source.add_argument("--url")
     source.add_argument("--input", type=Path)
     source.add_argument("--fixture", type=Path, help="Explicitly synthetic contract fixture; never rendered")
     run.add_argument("--transcript", type=Path)
-    run.add_argument("--prepare-only", action="store_true", help="Required in Phase A; stops at configured")
+    run.add_argument("--prepare-only", action="store_true", help="Required for run; stops at configured")
+    render = commands.add_parser("render", help="Render a manual span; output remains unaudited and unapproved")
+    render.add_argument("--config", type=Path, required=True)
+    source = render.add_mutually_exclusive_group(required=True)
+    source.add_argument("--url")
+    source.add_argument("--input", type=Path)
+    render.add_argument("--transcript", type=Path)
+    render.add_argument("--start", type=float, required=True)
+    render.add_argument("--end", type=float, required=True)
     for name in ("status", "resume"):
         command = commands.add_parser(name, help="Verify a saved run and its artifact checksums")
         command.add_argument("--workspace", type=Path, required=True)
         command.add_argument("--run-id", required=True)
         if name == "resume":
-            command.add_argument("--prepare-only", action="store_true")
+            modes = command.add_mutually_exclusive_group()
+            modes.add_argument("--prepare-only", action="store_true")
+            modes.add_argument("--render-only", action="store_true", help="Resume an explicit manual render")
     return cli
 
 
@@ -74,11 +85,23 @@ def main(argv=None) -> int:
                   "snapshot_version": snapshot.version if snapshot else None,
                   "remote_services_checked": False})
             return OK
-        if args.command in {"run", "resume"} and not args.prepare_only:
+        if args.command in {"run", "resume"} and not args.prepare_only and not getattr(args, "render_only", False):
             emit({"error": "execution_not_implemented",
-                  "message": "Phase A supports --prepare-only. No media or model stages will run."}, error=True)
+                  "message": "Use --prepare-only, render for an explicit span, or resume --render-only for a manual run."}, error=True)
             return UNAVAILABLE
-        if args.command == "run":
+        if args.command == "render":
+            from .execution import execute_manual
+            source = (SourceInput(kind="youtube", locator=args.url) if args.url else
+                      SourceInput(kind="local", locator=str(args.input)))
+            request = ManualRenderRequest(span=TimeSpan(start=args.start, end=args.end))
+            manifest, directory = prepare_run(args.config, source, transcript_path=args.transcript,
+                                              render_request=request)
+            manifest = execute_manual(directory.parent.parent, manifest.run_id)
+        elif args.command == "resume" and args.render_only:
+            from .execution import execute_manual
+            manifest = execute_manual(args.workspace, args.run_id)
+            directory = args.workspace.resolve() / "runs" / manifest.run_id
+        elif args.command == "run":
             source = (SourceInput(kind="youtube", locator=args.url) if args.url else
                       SourceInput(kind="local", locator=str(args.input)) if args.input else None)
             manifest, directory = prepare_run(args.config, source, fixture_path=args.fixture,
@@ -91,7 +114,11 @@ def main(argv=None) -> int:
               "stage": manifest.stage, "state": manifest.state, "outcome": manifest.outcome,
               "execution_kind": manifest.execution_kind,
               "input_fingerprint": manifest.input_fingerprint,
-              "message": "Inputs prepared; no download, transcription, inference, render, or approval performed."})
+              "approved": False,
+              "final_media": str(directory / manifest.artifacts["final_media"].path) if "final_media" in manifest.artifacts else None,
+              "message": ("Manual render run; no topic selection, content audit, or approval performed."
+                          if manifest.execution_kind == "manual_render" else
+                          "Inputs prepared; no download, transcription, inference, render, or approval performed.")})
         return OUTCOME_EXIT_CODES.get(manifest.outcome, OK)
     except ValidationError as exc:
         # Never log input values or validator contexts: they could contain a
@@ -104,6 +131,10 @@ def main(argv=None) -> int:
     except WorkspaceBusy:
         emit({"error": "workspace_busy", "message": "Another worker owns the workspace lock."}, error=True)
         return BUSY
+    except MediaError as exc:
+        emit({"error": str(exc), "message": "Media stage failed; inspect its local worker.log.",
+              "run_id": manifest.run_id if "manifest" in locals() else getattr(args, "run_id", None)}, error=True)
+        return FAILED
     except (ArtifactError, ValueError):
         emit({"error": "invalid_artifact", "message": "Invalid input or checkpoint; inspect local files."}, error=True)
         return INVALID
@@ -111,7 +142,7 @@ def main(argv=None) -> int:
         emit({"error": "local_io_failed", "message": "Could not read or write a required local file."}, error=True)
         return FAILED
     except KeyboardInterrupt:
-        emit({"error": "interrupted", "message": "Preparation interrupted; incomplete runs are not committed."}, error=True)
+        emit({"error": "interrupted", "message": "Interrupted; only stages committed in a valid manifest can be resumed."}, error=True)
         return 130
 
 

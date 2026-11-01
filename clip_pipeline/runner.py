@@ -8,7 +8,7 @@ from uuid import uuid4
 from . import __version__
 from .artifacts import ArtifactError, ArtifactStore, atomic_write, digest, json_bytes, read_json_model
 from .config import PipelineConfig, load_config, load_inputs
-from .contracts import FixtureBundle, RunManifest, SourceInput, STAGES, TranscriptArtifact
+from .contracts import FixtureBundle, ManualRenderRequest, RunManifest, SourceInput, STAGES, TranscriptArtifact
 
 
 def transition(manifest: RunManifest, *, stage=None, outcome=None,
@@ -38,7 +38,8 @@ def transition(manifest: RunManifest, *, stage=None, outcome=None,
 
 def prepare_run(config_path: Path, source: SourceInput | None = None, *,
                 fixture_path: Path | None = None,
-                transcript_path: Path | None = None) -> tuple[RunManifest, Path]:
+                transcript_path: Path | None = None,
+                render_request: ManualRenderRequest | None = None) -> tuple[RunManifest, Path]:
     """Validate all input JSON before creating or locking a workspace.
 
     Media content is not opened, downloaded, or hashed here. Source binding and
@@ -46,6 +47,12 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
     """
     config = load_config(config_path)
     policy, snapshot = load_inputs(config)
+    if render_request is not None:
+        duration = render_request.span.end - render_request.span.start
+        if fixture_path or not config.selection.min_seconds <= duration <= config.selection.max_seconds:
+            raise ArtifactError("manual render requires real media and a span within the configured duration band")
+        if config.media.hook_overlay:
+            raise ArtifactError("manual rendering has no audited hook copy; disable hook_overlay")
     if (source is None) == (fixture_path is None):
         raise ArtifactError("provide exactly one source or synthetic fixture")
     fixture = None
@@ -80,6 +87,8 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
         inputs["fixture"] = ("fixture.json", fixture)
     if transcript is not None:
         inputs["supplied_transcript"] = ("supplied-transcript.json", transcript)
+    if render_request is not None:
+        inputs["render_request"] = ("render-request.json", render_request)
 
     store = ArtifactStore(Path(config.workspace))
     with store.lock():
@@ -92,9 +101,11 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
         manifest = RunManifest(
             implementation_version=__version__, run_id=run_id,
             created_at=now, updated_at=now,
-            execution_kind="fixture" if fixture is not None else "preparation",
+            execution_kind=("manual_render" if render_request is not None else
+                            "fixture" if fixture is not None else "preparation"),
             source=source, input_fingerprint=digest({k: v.sha256 for k, v in refs.items()}),
             artifacts=refs,
+            input_artifact_keys=list(refs),
         )
         # A run only becomes visible as prepared when all its snapshots exist.
         atomic_write(directory / "manifest.json", json_bytes(manifest))
@@ -106,7 +117,8 @@ def inspect_run(workspace: Path, run_id: str) -> RunManifest:
     manifest = store.read_manifest(run_id)
     if not {"config", "policy", "submission"}.issubset(manifest.artifacts):
         raise ArtifactError("run is missing required input snapshots")
-    expected = digest({k: v.sha256 for k, v in manifest.artifacts.items()})
+    keys = manifest.input_artifact_keys if manifest.input_artifact_keys is not None else manifest.artifacts
+    expected = digest({k: manifest.artifacts[k].sha256 for k in keys})
     if manifest.input_fingerprint != expected:
         raise ArtifactError("input fingerprint does not match the pinned artifacts")
     config = read_json_model(store.run_dir(run_id) / manifest.artifacts["config"].path, PipelineConfig)

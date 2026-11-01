@@ -1,0 +1,15 @@
+-r requirements-clip-foundry.txt
+# CPU torch/torchvision are installed from the PyTorch CPU index by the image.
+numpy==1.26.4
+opencv-python==4.11.0.86
+opencv-contrib-python==4.11.0.86
+mediapipe==0.10.14
+jax==0.4.38
+jaxlib==0.4.38
+ultralytics==8.4.46
+scenedetect==0.7
+faster-whisper==1.2.1
+python-dotenv==1.2.2
+Pillow==12.2.0
+yt-dlp[default]==2026.10.26
+tqdm==4.67.3

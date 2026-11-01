@@ -2,7 +2,7 @@
 
 Date: 2026-11-01  
 Repository baseline reviewed: `459716b`  
-Status: Phase A implemented; Phases B–F remain planned. The planning task itself made no application or infrastructure changes. See the [Phase A runbook](../clip-only-runbook.md) for the implemented CLI and limitations.
+Status: Phases A–C implemented and locally validated; Phases D–F remain planned. Phase C completes the manual single-span media baseline, not content approval or visual acceptance. See the [clip-only runbook](../clip-only-runbook.md) for implemented commands and limitations.
 
 ## 1. Outcome and scope
 
@@ -336,7 +336,8 @@ Paths are proposed additions unless marked existing. Keep application changes li
 | `clip_pipeline/markets.py` | Backend fetch/auth boundary, snapshot validation/cache, final eligibility refresh. |
 | `clip_pipeline/selection.py` | Topic gates, batched detail extraction, zero-count semantics, evidence checks, candidate ranking. |
 | `clip_pipeline/audit.py` | Final-audio/source comparison, independent Foundry audit, deterministic media checks, approval rules. |
-| `clip_pipeline/media.py` | Media subprocess interface; ingress/transcription/render/final-ASR operations with enforced flags and model release. |
+| `clip_pipeline/execution.py`, `clip_pipeline/media_worker.py`, `clip_pipeline/media_common.py` | Sequential controller, isolated media subprocesses, bounded execution, atomic checkpoints and deterministic media checks. |
+| `clip_pipeline/ingest.py`, `clip_pipeline/transcript.py`, `clip_pipeline/render.py` | Bounded source acquisition, source-bound ASR/import/cache, and reusable single-clip render operation; final-audio audit follows in E. |
 | `clip_pipeline/storage.py` | Private Blob uploads, checkpoint persistence, idempotent final commit manifests. |
 | `clip_pipeline/report.py` | Escaped static review report, comparison view, review decision validation. |
 | `configs/clip-only.example.json` | Nonsecret worker/provider/media/storage settings with placeholders. |
@@ -349,7 +350,7 @@ Paths are proposed additions unless marked existing. Keep application changes li
 | **Existing `clip_selection.py`** | Reuse pure helpers; add explicit new-policy variants only when needed. Preserve existing default count/floor behavior. |
 | **Existing `transcribe_backends.py`** | Reuse unchanged unless explicit ASR settings/resource lifecycle cannot be passed safely; any change must preserve current defaults. |
 | **Existing `reframe_v2.py`, `ffmpeg_utils.py`, `subtitles.py`** | Reuse first; narrowly change only if necessary for explicit output normalization or render result contract. No aesthetic rewrite. |
-| `requirements-clip.txt`, `Dockerfile.clip`, `docker-compose.clip.yml` | Dedicated pinned dependencies/runtime, font/model setup, nonroot worker, persistent workspace. Exclude Google, billing, dubbing, social, dashboard, and Remotion dependencies. |
+| `requirements-clip-core.txt`, `requirements-clip-foundry.txt`, `requirements-clip-media.txt`, `Dockerfile.clip` | Separate controller/provider/media dependencies and CPU runtime with bundled fonts. Nonroot Azure deployment, persistent-volume ownership and `docker-compose.clip.yml` remain in F. Exclude Google, billing, dubbing, social, dashboard, and Remotion dependencies. |
 | **Existing `.dockerignore`, `.gitignore`** | Only adjust if needed to exclude new local secrets/reports/snapshots and include intentional runtime assets. |
 | `infra/azure/clip-worker.bicep`, `infra/azure/clip-worker.example.bicepparam` | Parameterized VM/data disk/identity/storage/registry/logging resources and role bindings; existing Foundry input. No deployment in planning work. |
 | `ops/clip-worker-bootstrap.sh` | Idempotent Docker/workspace setup and identity-based image pull; no secrets baked into images or logs. |
@@ -374,15 +375,15 @@ Exit: a fixture run validates configuration and writes a reproducible manifest w
 
 ### B. Foundry adapter and dependency isolation
 
-Implemented locally: explicit `FoundryBackend` behind `llm_backend.foundry_backend`,
+Implemented and committed: explicit `FoundryBackend` behind `llm_backend.foundry_backend`,
 refreshing identity/API-key authentication, strict schemas and local validation,
 typed failures, bounded retries/repair, usage accounting, conservative token
 batching, and `clip_pipeline preflight`. Neutral legacy schemas/parser are
 extracted with compatibility re-exports; a fresh media profile prevents dotenv
 and inherited credentials from enabling Gemini paths. Pinned provider requirements
 and a separate CI environment without Google SDK cover the import boundary.
-Heavyweight local detectors are stubbed in that import test; a complete media
-image and real rendering validation remain in C/F. The live Azure smoke result
+Heavyweight local detectors are stubbed in that light import test; the carried-over
+real media image check is implemented in C. Azure worker validation remains in F. The live Azure smoke result
 is recorded in the operator's ignored local preflight report. Validation passed:
 mocked provider tests, the environment without Google SDK, and a real v1
 structured-output request to GPT-5-mini using Azure CLI developer identity through
@@ -400,10 +401,18 @@ Exit: mocked provider tests pass; a real Azure smoke request returns schema-vali
 
 ### C. Source, transcript reuse, and rendering seam
 
+Implemented locally: `render --start/--end` and `resume --render-only`, guarded direct YouTube/local ingestion, source hashing and provenance, validated word-transcript import, content/model/settings-keyed ASR reuse, isolated stage subprocesses, and `render_one_clip`. The seam composes the existing cutter, renderer and caption helpers without changing the legacy render loop. Clean/final paths and caption/layout sidecars are distinct; output is normalized and fully decoded to check 1080×1920 square-pixel H.264/AAC delivery. A completed manual render remains an unaudited `checkpointed` run, never an approved result. Sparse/no-audio sources fail explicitly in this manual path; selection outcomes follow in D.
+
+`Dockerfile.clip`, the media requirements and `tests/media_smoke.py` close the pending real-image test without Google SDK: actual model imports, speech ASR, caption rendering, unchanged-source reuse, same-name changed-source invalidation, full-width and portrait input, and checkpoint resume passed locally with networking disabled. No heavyweight modules were mocked in this test. Lightweight controller/cache/error tests also pass. Automated content audit, final-audio ASR, acceptance of sample aesthetics, remote cache refresh, retention cleanup and cross-run render caching remain later work. See the [runbook](../clip-only-runbook.md) for commands and boundaries.
+
 1. Reuse URL validation/SSRF protections and downloader; local-file fallback remains available.
 2. Implement source hash/provenance and validated transcript import/cache.
 3. Extract single-clip render operation and exact final-path contract.
 4. Run known source boundaries through fixed 9:16 output before involving selection.
+
+Real-sample testing exposed instantaneous Whisper tokens. The adapter groups these with adjacent timed words using observed outer bounds, preserves all text, and records a timing warning. It does not invent sub-word timestamps; future selection/audit must retain the warning when checking boundaries.
+
+A real YouTube sample was acquired and transcribed in full, then manually rendered. A second span reused both source and transcript with networking disabled. Final media checks and frame inspection passed; the inherited caption position overlaps the source's broadcast lower third, so visual acceptance is explicitly pending quality iteration. These local CPU tests use the `tiny` ASR model for integration validation, not a transcript-accuracy benchmark or production model selection. Real URLs, transcripts, reports and clips stay in ignored local output.
 
 Exit: a manually specified span produces a playable captioned vertical clip. Repeating with unchanged source/ASR reuses the transcript. Changing the source invalidates it. No dubbing, Google, social, S3, or full app startup occurs.
 

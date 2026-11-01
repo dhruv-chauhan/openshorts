@@ -97,6 +97,13 @@ class TimeSpan(Contract):
         return self
 
 
+class ManualRenderRequest(Contract):
+    schema_version: Literal["1"] = "1"
+    selection_method: Literal["manual"] = "manual"
+    span: TimeSpan
+    approved: Literal[False] = False
+
+
 class Word(TimeSpan):
     word: Text
 
@@ -125,6 +132,7 @@ class TranscriptArtifact(Contract):
     backend: Text
     model_version: Text
     timing: Literal["segment", "word"]
+    timing_warnings: list[Literal["zero_duration_words_grouped"]] = Field(default_factory=list)
     segments: list[Segment] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -308,17 +316,24 @@ class RunManifest(Contract):
     run_id: RunId
     created_at: AwareDatetime
     updated_at: AwareDatetime
-    execution_kind: Literal["preparation", "fixture"]
+    execution_kind: Literal["preparation", "fixture", "manual_render"]
     source: SourceInput
     stage: Stage = "configured"
-    state: Literal["prepared", "running", "finished"] = "prepared"
+    state: Literal["prepared", "running", "checkpointed", "finished"] = "prepared"
     outcome: Outcome | None = None
     reason_code: Text = "phase_a_prepared"
     input_fingerprint: Sha256
     artifacts: dict[str, ArtifactRef]
+    input_artifact_keys: list[Text] | None = None
 
     @model_validator(mode="after")
     def state_consistency(self):
+        if self.input_artifact_keys is not None and (
+                len(set(self.input_artifact_keys)) != len(self.input_artifact_keys) or
+                not set(self.input_artifact_keys).issubset(self.artifacts)):
+            raise ValueError("input artifact keys must be unique and present")
+        if self.state == "checkpointed" and (self.execution_kind != "manual_render" or self.stage != "rendered"):
+            raise ValueError("only manual rendered output can stop at an unaudited checkpoint")
         if self.updated_at < self.created_at:
             raise ValueError("updated_at cannot precede created_at")
         if (self.state == "finished") != (self.outcome is not None):

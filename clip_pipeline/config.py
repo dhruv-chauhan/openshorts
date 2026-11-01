@@ -141,6 +141,8 @@ class BlobConfig(Contract):
 
 
 class LimitsConfig(Contract):
+    media_timeout_seconds: Annotated[int, Field(ge=30, le=86400)] = 14400
+    download_timeout_seconds: Annotated[int, Field(ge=30, le=86400)] = 1800
     max_source_seconds: Annotated[int, Field(gt=0)] = 14400
     max_source_bytes: Annotated[int, Field(gt=0)] = 10737418240
     min_free_disk_bytes: Annotated[int, Field(gt=0)] = 21474836480
