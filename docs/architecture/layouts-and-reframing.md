@@ -1,5 +1,12 @@
 # Layout selection and vertical reframing
 
+The optional [clip-only Azure profile](../clip-only-runbook.md) disables Gemini
+layout selection, screencast detection, subtitle-band detection, and visual hook
+grounding before media imports. Explicit guards keep them disabled even if a
+Gemini key or enabled module flag is injected later. Local tracking/GENERAL
+rendering remains available. These restrictions apply only to that profile;
+legacy application behavior below is unchanged.
+
 ## Choosing the layout (`layout_picker.py`, `app.py:layout_env`)
 
 `POST /api/process` accepts `layouts`: a JSON list or comma-separated string of

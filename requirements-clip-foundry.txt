@@ -1,0 +1,7 @@
+-r requirements-clip-core.txt
+openai==3.42.0
+httpx2==2.16.0
+azure-identity==1.27.0
+jsonschema==4.25.1
+# Legacy provider facade/media imports use httpx; OpenAI 3.x uses httpx2.
+httpx==0.28.1

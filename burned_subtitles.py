@@ -22,6 +22,8 @@ less, it never changes a layout.
 Off with ``SUBTITLE_BAND_CHECK=0``. Any failure means "no subtitles": the clip
 renders exactly as it did before this module existed.
 """
+
+from clip_pipeline.profile import clip_only_mode
 import json
 import os
 
@@ -99,15 +101,14 @@ def detect(video_path, frames=None):
     Never raises: like the layout picker, a missing answer degrades to today's
     render.
     """
-    if not ENABLED:
+    if clip_only_mode() or not ENABLED:
         return None
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return None
     model_name = os.environ.get("GEMINI_MODEL") or 'gemini-3.1-flash-lite'
     try:
-        from google import genai
-        from google.genai import types as genai_types
+        from llm_google import genai, genai_types
         from pydantic import BaseModel
 
         import gemini_worker

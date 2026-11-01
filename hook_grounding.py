@@ -20,6 +20,8 @@ hook stands. Never raises: a hook problem must never cost the clip.
 """
 from __future__ import annotations
 
+from clip_pipeline.profile import clip_only_mode
+
 import json
 import os
 from typing import Optional
@@ -123,8 +125,7 @@ def frames_at(video_path, times, width=None):
 
 def _ask_gemini(frames, prompt, api_key):
     """One vision call; returns the parsed dict. Split out so tests can stub it."""
-    from google import genai
-    from google.genai import types as genai_types
+    from llm_google import genai, genai_types
     import gemini_worker
 
     client = genai.Client(api_key=api_key)
@@ -145,6 +146,8 @@ def reground(clip_path, clip, transcript, start, end) -> Optional[dict]:
     """Rewrite ``clip['viral_hook_text']`` / ``video_title_for_youtube_short``
     in place from the clip's frames. Returns what changed (also stored under
     ``clip['hook_grounding']``), or None when skipped or failed."""
+    if clip_only_mode():
+        return None
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print("   🪝 Hook grounding skipped: needs a Gemini key (frames), "

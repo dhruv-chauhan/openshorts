@@ -108,7 +108,7 @@ def generate_json(prompt: str, schema: Type[BaseModel], model: Optional[str] = N
     provider. Raises on HTTP errors, empty bodies and schema violations; the
     retry policy lives in the caller, same as for Gemini.
     """
-    import gemini_worker  # local import: keeps this module free of the google SDK
+    from llm_json import _parse_json_response_text
 
     url = f"{base_url()}/chat/completions"
     model = model or model_name()
@@ -144,7 +144,7 @@ def generate_json(prompt: str, schema: Type[BaseModel], model: Optional[str] = N
         text = msg.get("content") or ""
         if isinstance(text, list):  # some servers return content parts
             text = "".join(p.get("text", "") for p in text if isinstance(p, dict))
-    parsed = gemini_worker._parse_json_response_text(text)
+    parsed = _parse_json_response_text(text)
     # Validate against the same schema Gemini enforces server-side, so a
     # local model that drops a field fails here with a readable error
     # (retried by the caller) instead of deep inside the clip pipeline.
@@ -163,3 +163,9 @@ def generate_json(prompt: str, schema: Type[BaseModel], model: Optional[str] = N
         "local": True,
     }
     return validated, cost
+
+
+def foundry_backend(config, **kwargs):
+    """Explicit provider factory; legacy environment-based routing stays unchanged."""
+    from clip_pipeline.foundry import FoundryBackend
+    return FoundryBackend(config, **kwargs)

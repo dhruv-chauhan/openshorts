@@ -1,6 +1,6 @@
-# Clip-only pipeline: Phase A
+# Clip-only pipeline: Phases A–B
 
-Phase A provides configuration and artifact contracts, local preparation, state validation, checksums, and a single-worker lock. It does **not** download media, transcribe, call Foundry/the market API, render, audit, approve, or upload anything. Azure resource provisioning and the live provider/media stages come later in the [implementation plan](architecture/clip-only-azure-implementation-plan.md).
+Phase A provides configuration and artifact contracts, local preparation, state validation, checksums, and a single-worker lock. Phase B adds the Foundry text adapter, a live capability preflight, and the enforced media environment profile. `run` and `resume` still only prepare inputs: downloading, transcription, topic selection, rendering, auditing, approval, and Blob upload arrive in later phases of the [implementation plan](architecture/clip-only-azure-implementation-plan.md).
 
 ## Setup
 
@@ -13,6 +13,43 @@ python -m pip install -r requirements-clip-core.txt
 ```
 
 No full `requirements.txt`, Docker, media libraries, Azure SDK, or credentials are needed for Phase A. The package never reads `.env` or secret environment-variable values during preparation.
+
+For Phase B, install `requirements-clip-foundry.txt` instead. It includes the core requirements, the OpenAI v1 client, Azure Identity, and local JSON Schema validation; it does not install Google, ElevenLabs, or the media ML stack.
+
+## Foundry setup and preflight
+
+Use an existing Azure OpenAI/Foundry resource when available. Deploy a currently supported text model with strict structured outputs, using a standard pay-as-you-go SKU. The initial adapter evaluation uses GPT-5-mini with `max_completion_tokens`, omitted temperature, and `reasoning_effort: "minimal"`. Model availability, quota, and lifecycle are region/subscription specific; the deployment name is configurable independently for relevance, selection, and audit. All three may share one deployment initially.
+
+Keep the real config under ignored `output/clip-only-azure/` or outside the repository. Copy a config and update its relative policy/market paths or use absolute paths. Set the inference URL to `https://YOUR-RESOURCE.openai.azure.com/openai/v1/` or the resource's `https://YOUR-RESOURCE.services.ai.azure.com/openai/v1/` endpoint, not the project or management URL. The live development probe passed on the `services.ai.azure.com` endpoint with Azure CLI identity and the default `https://ai.azure.com/.default` scope. Use the endpoint that passes preflight for the actual resource.
+
+Authentication is explicit:
+
+- `developer_identity`: uses only the signed-in Azure CLI identity (`az login`), with automatic token refresh. It does not search other developer credentials.
+- `managed_identity`: uses only Azure Managed Identity; optionally set `managed_identity_client_id` for a user-assigned identity. Verify this again inside the eventual worker container.
+- `api_key`: reads only the variable named by `api_key_env`. The value is never saved in configuration or usage output.
+
+The identity needs inference data permissions on the resource. **Cognitive Services OpenAI User** covers OpenAI deployment calls. For the Foundry gateway, Microsoft documents a custom role with `Microsoft.CognitiveServices/accounts/MaaS/*`, or the broader Cognitive Services User role, for [keyless inference](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/configure-entra-id). The wildcard includes inference APIs beyond chat completions. Granular `MaaS/chat/completions/action` and `MaaS/v1/chat/completions/action` permissions exist, but did not resolve the development v1 probe's `PermissionDenied` response; do not assume those roles alone prove v1 access. Role configuration remains an operator action outside the preflight command. New role assignments can take time to propagate. The default token scope is `https://ai.azure.com/.default`; `https://cognitiveservices.azure.com/.default` is also an explicit supported setting. Neither authentication failures nor missing deployments fall back to API keys or another provider.
+
+```bash
+python -m pip install -r requirements-clip-foundry.txt
+python -m clip_pipeline preflight --config output/clip-only-azure/config.json
+```
+
+This command makes **one small paid request per distinct deployment**, validates the structured response, and reports deployment roles and per-attempt usage as JSON. It verifies the configured token-limit parameter, optional temperature/reasoning settings, identity, and basic strict-schema support. It does not validate market API access, Blob access, media quality, or topic prompts that have not yet been implemented. It creates no run and approves no content. Exit 4 means the probe failed; the JSON error is safe to display. To retain a local report, redirect stdout and stderr to separate ignored files.
+
+The adapter is available through `llm_backend.foundry_backend(config)` or `clip_pipeline.foundry.FoundryBackend(config)`. Use one context-managed instance per sequential run so its aggregate call/token limits cover all stages and retries. `generate(stage=..., system=..., payload=..., response_model=..., validate=...)` returns a validated Pydantic model; the optional callback enforces stage-specific semantic constraints, such as exact coverage of window IDs. Later stages must persist `usage_report()` with their artifacts and carry prior usage forward on resume; those stages are not wired yet.
+
+`batch_payloads` preserves complete items and shared policy while counting the same request overhead used by the adapter. The context budget reserves configured output (including reasoning) and uses a conservative UTF-8 byte bound for byte-BPE text models. This intentionally under-fills the model context; it is not billed token usage. Oversized individual items fail rather than being silently truncated. Failed attempts without reported usage retain their reservation against the run budget.
+
+SDK retries are disabled; the adapter owns `max_attempts`, bounded backoff, jitter, and Retry-After handling capped at 60 seconds. Invalid JSON/schema/semantic results get at most one repair request. Refusals, truncated output, authentication errors, and unsupported request settings remain explicit failures, never successful empty results. There is no downgrade to plain JSON or unrestricted text. Original Pydantic constraints are checked locally after the wire schema is adapted to the supported subset.
+
+Usage reports include stage, deployment, returned model, request ID when supplied, duration, token counts, attempt number, and outcome. Missing token usage and unknown cost remain null. Configure `foundry.prices` keyed by deployment with `input_per_million` and `output_per_million` (USD) to get an estimate. Cached input uses the full configured input rate; the estimate is not a billing reconciliation. Raw prompts, response bodies, keys, and transcripts are excluded from reports. HTTP proxy environment variables are not inherited by the Foundry client.
+
+## Media dependency boundary
+
+Before importing legacy media modules in a fresh subprocess, call `activate_media_profile(config.media)` or supply `media_environment(config.media)` as its environment. Late activation is rejected. It disables dotenv, removes inherited Gemini/legacy LLM credentials and routing settings, and pins the optional Gemini layout/subtitle/hook/silent-selection paths off. Guards also reject legacy selection if a sentinel Gemini key is injected later. Local captions, face tracking, and GENERAL layout remain available; visual intelligence is deferred.
+
+Legacy Gemini users retain their existing routing and response shapes. Neutral schemas and the permissive legacy parser now live in `llm_schemas.py` and `llm_json.py`, with compatibility re-exports in `gemini_worker.py`. Foundry uses its own strict parser. The media entry point and subprocess execution are connected in Phase C; this phase does not claim a rendered-video smoke test or a complete media image.
 
 ## Validate configuration
 
@@ -103,10 +140,10 @@ The contracts also define lifecycle stage/outcome rules, source/transcript/candi
 
 | Code | Meaning |
 |---|---|
-| 0 | Validation, preparation or inspection succeeded; future resolved successful outcomes also use 0. |
+| 0 | Validation, preparation, inspection, or live preflight succeeded. |
 | 2 | Invalid command/configuration/input or corrupt checkpoint. |
 | 3 | Reserved for a future `needs_review` outcome. |
-| 4 | Local I/O/operational failure; future failed/partial-failure outcomes. |
+| 4 | Local I/O, provider preflight, or other operational failure. |
 | 5 | Another process owns the workspace lock. |
 | 6 | Requested execution is not implemented in this phase. |
 | 130 | Interrupted by the operator. |
@@ -117,7 +154,10 @@ Successful command output is JSON on stdout. Runtime validation errors use JSON 
 
 ```bash
 python -m pytest tests/test_clip_pipeline_config.py \
-  tests/test_clip_pipeline_artifacts.py tests/test_clip_pipeline_cli.py -q
+  tests/test_clip_pipeline_artifacts.py tests/test_clip_pipeline_cli.py \
+  tests/test_clip_pipeline_foundry.py tests/test_clip_pipeline_isolation.py -q
 ```
 
 The isolation test starts a fresh interpreter that blocks media/cloud/app imports and network connection/DNS operations. Other tests cover invalid configuration, source/evidence/timestamp contracts, pinned resume inputs, corruption, atomic write failure, lock contention and process death, and distinguishing preparation from completed output.
+
+Phase B tests exercise the real OpenAI SDK through a mocked HTTP transport: strict schemas, repairs, refusals, truncation, HTTP/network errors, bounded retries, budgets, batching, usage, auth configuration, and preflight deduplication. The separate CI job installs no Google SDK and tests fresh-process media imports with local heavyweight detectors stubbed to avoid weight downloads. This proves the provider import/guard boundary, not actual ML rendering. Live Azure preflight is an explicit operator command, never an automatic CI test.

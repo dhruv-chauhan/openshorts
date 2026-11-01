@@ -374,6 +374,24 @@ Exit: a fixture run validates configuration and writes a reproducible manifest w
 
 ### B. Foundry adapter and dependency isolation
 
+Implemented locally: explicit `FoundryBackend` behind `llm_backend.foundry_backend`,
+refreshing identity/API-key authentication, strict schemas and local validation,
+typed failures, bounded retries/repair, usage accounting, conservative token
+batching, and `clip_pipeline preflight`. Neutral legacy schemas/parser are
+extracted with compatibility re-exports; a fresh media profile prevents dotenv
+and inherited credentials from enabling Gemini paths. Pinned provider requirements
+and a separate CI environment without Google SDK cover the import boundary.
+Heavyweight local detectors are stubbed in that import test; a complete media
+image and real rendering validation remain in C/F. The live Azure smoke result
+is recorded in the operator's ignored local preflight report. Validation passed:
+mocked provider tests, the environment without Google SDK, and a real v1
+structured-output request to GPT-5-mini using Azure CLI developer identity through
+the resource's `services.ai.azure.com/openai/v1/` endpoint. The account-scoped
+Foundry inference permission was explicitly approved and applied. The one shared
+deployment was verified for relevance, selection, and audit configuration; stage
+prompts and media execution remain in later phases. VM managed-identity access
+still requires verification inside the eventual worker container.
+
 1. Extract neutral schemas/parser and implement Foundry client/auth/errors/usage.
 2. Make media import graph work without Google SDK; enforce profile flags.
 3. Add token-bounded request batching and capability preflight.

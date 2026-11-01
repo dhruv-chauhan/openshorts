@@ -25,7 +25,24 @@ jobs:
           opencv-python-headless python-dotenv google-genai fastapi boto3
           PyJWT email-validator python-multipart
       - name: Run tests
-        run: pytest tests/ -v
+        # Foundry transport tests use the same pinned SDK as the clip-only worker.
+        run: |
+          pip install -r requirements-clip-foundry.txt
+          pytest tests/ -v
+
+  clip-only-no-google:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install clip-only provider and import-test dependencies
+        run: pip install -r requirements-clip-foundry.txt pytest httpx python-dotenv opencv-python-headless pillow tqdm
+      - name: Verify no Google SDK and test isolated profile
+        run: |
+          python -c "from importlib.metadata import distributions; assert 'google-genai' not in {d.metadata['Name'].lower() for d in distributions()}"
+          pytest tests/test_clip_pipeline_*.py -q
 
   frontend-build:
     runs-on: ubuntu-latest

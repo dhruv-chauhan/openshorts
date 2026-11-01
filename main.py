@@ -20,8 +20,8 @@ from tqdm import tqdm
 import yt_dlp
 import mediapipe as mp
 # import whisper (replaced by faster_whisper inside function)
-from google import genai
-from google.genai import types as genai_types
+from llm_google import genai, genai_types
+from clip_pipeline.profile import clip_only_mode, reject_legacy_selection
 
 import frame_sampler
 import gpu_decode
@@ -42,7 +42,8 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module='google.protobuf')
 
 # Load environment variables
-load_dotenv()
+if not clip_only_mode():
+    load_dotenv()
 
 # --- Constants ---
 ASPECT_RATIO = 9 / 16
@@ -1968,6 +1969,7 @@ def _run_gemini_stage(client, model_name, prompt, schema):
     retry policy is shared because a local server has the same failure
     shapes (connection refused while the model loads, a truncated body,
     a 5xx from a busy vLLM)."""
+    reject_legacy_selection()
     use_local = llm_backend.active()
     config = None if use_local else genai_types.GenerateContentConfig(
         response_mime_type="application/json",
@@ -2063,6 +2065,7 @@ def get_viral_clips(transcript_result, video_duration):
     the expensive detail reasoning focused on the shortlist. Cuts are snapped to
     word boundaries so clips don't start/end mid-word.
     """
+    reject_legacy_selection()
     language = str(transcript_result.get('language') or 'unknown')
     if llm_backend.active():
         # Self-hosted text model: no Google key needed for this stage.
@@ -2247,6 +2250,7 @@ def get_visual_clips(video_path, video_duration, language="en"):
     """Clip a SILENT video by vision: Gemini watches the footage and picks the
     most engaging visual moments (no transcript). Returns the same
     {"shorts", "cost_analysis"} shape as get_viral_clips, or None."""
+    reject_legacy_selection()
     print("🎥  Silent video — analyzing with Gemini vision (no transcript)...")
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:

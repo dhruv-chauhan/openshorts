@@ -41,6 +41,8 @@ whole-video mode already has, at 2.2s per clip instead of ~15s.
 Off by default (``AUTO_LAYOUT=1``). A caller that already switched layouts on
 by hand wins: this only ever ADDS, so an explicit choice is never overridden.
 """
+
+from clip_pipeline.profile import clip_only_mode
 import json
 import os
 
@@ -197,7 +199,7 @@ def pick(video_path, video_duration):
     Never raises: a missing answer has to degrade to today's routing rather
     than break the job.
     """
-    if not ENABLED:
+    if clip_only_mode() or not ENABLED:
         return "none"
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -208,8 +210,7 @@ def pick(video_path, video_duration):
     try:
         # Inside the try on purpose: the contract above is that this never
         # raises, and an unimportable SDK is just one more reason to fall back.
-        from google import genai
-        from google.genai import types as genai_types
+        from llm_google import genai, genai_types
         import gemini_worker
 
         frames = sample_frames(video_path)

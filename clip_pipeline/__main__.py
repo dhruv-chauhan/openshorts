@@ -1,4 +1,4 @@
-"""Local-only Phase A CLI. Real execution is explicitly unavailable until B–F."""
+"""Run preparation and explicit Foundry capability preflight."""
 from __future__ import annotations
 
 import argparse
@@ -26,10 +26,12 @@ OUTCOME_EXIT_CODES = {"completed": OK, "completed_no_matches": OK,
 
 
 def parser():
-    cli = argparse.ArgumentParser(description="Clip-only pipeline: isolated Phase A preparation")
+    cli = argparse.ArgumentParser(description="Clip-only pipeline: preparation and Foundry preflight")
     commands = cli.add_subparsers(dest="command", required=True)
     validate = commands.add_parser("validate", help="Validate config and local policy/snapshot without IO to services")
     validate.add_argument("--config", type=Path, required=True)
+    preflight = commands.add_parser("preflight", help="Make a small paid Foundry request per deployment")
+    preflight.add_argument("--config", type=Path, required=True)
     run = commands.add_parser("run", help="Prepare a run; media/model execution is not implemented yet")
     run.add_argument("--config", type=Path, required=True)
     source = run.add_mutually_exclusive_group(required=True)
@@ -54,6 +56,16 @@ def emit(value, *, error=False):
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
+        if args.command == "preflight":
+            from .foundry import FoundryError, preflight
+            config = load_config(args.config)
+            load_inputs(config)
+            try:
+                result = preflight(config)
+            except FoundryError as exc:
+                result = {"ok": False, **exc.public()}
+            emit(result, error=not result["ok"])
+            return OK if result["ok"] else FAILED
         if args.command == "validate":
             config = load_config(args.config)
             policy, snapshot = load_inputs(config)

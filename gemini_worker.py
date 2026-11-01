@@ -1,70 +1,26 @@
+from __future__ import annotations
+
 import argparse
 import json
 import mimetypes
 import os
 import sys
-from typing import List, Optional
+from typing import Optional
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types as genai_types
-from pydantic import BaseModel
+from llm_google import genai, genai_types
+from clip_pipeline.profile import clip_only_mode
+from llm_schemas import (ScoredWindowModel, ScoreResponse, DetailClipModel,
+                         DetailResponse, VisualClipModel, VisualResponse,
+                         GroundedHook, LayoutChoice, ShotContentModel, ShotContentResponse)
+from llm_json import (_strip_code_fences, _extract_json_candidate,
+                      _escape_invalid_unicode_escapes, _parse_json_response_text)
 
 from clip_selection import (clip_count_targets, clip_duration_bounds,
                             lookup_model_prices)
 
-load_dotenv()
-
-
-# --- Structured output schemas (passed as response_schema so the API
-# --- guarantees the format instead of us repairing free-form JSON). ---
-
-class ScoredWindowModel(BaseModel):
-    id: str
-    start: float
-    end: float
-    score: int
-    reason: str
-
-
-class ScoreResponse(BaseModel):
-    windows: List[ScoredWindowModel]
-
-
-class DetailClipModel(BaseModel):
-    start: float
-    end: float
-    source_window_id: str
-    predicted_score: int
-    video_description_for_tiktok: str
-    video_description_for_instagram: str
-    video_title_for_youtube_short: str
-    viral_hook_text: str
-    # One sentence on what makes THIS moment a clip, shown under the score in
-    # the dashboard. Defaulted so a small local model that skips it does not
-    # fail schema validation and lose the clip.
-    why: str = ""
-
-
-class DetailResponse(BaseModel):
-    shorts: List[DetailClipModel]
-
-
-# Visual (no-transcript) clip selection: Gemini watches a silent video and
-# picks moments from the imagery. Same output shape as DetailClipModel minus
-# the transcript-only source_window_id.
-class VisualClipModel(BaseModel):
-    start: float
-    end: float
-    predicted_score: int
-    video_description_for_tiktok: str
-    video_description_for_instagram: str
-    video_title_for_youtube_short: str
-    viral_hook_text: str
-
-
-class VisualResponse(BaseModel):
-    shorts: List[VisualClipModel]
+if not clip_only_mode():
+    load_dotenv()
 
 
 VISUAL_PROMPT_TEMPLATE = """
@@ -85,15 +41,6 @@ For each clip write catchy copy in {language} (a scroll-stopping hook, a TikTok
 and an Instagram description, and a YouTube title ≤100 chars). Order clips best
 to worst by how likely they are to stop a viewer scrolling.
 """
-
-
-# Grounded rewrite of hook + title for a clip whose meaning lives on screen
-# (SCREENCAST / WIDE / INSET stretches): the detail pass never saw a frame,
-# so its hook summarises the topic instead of naming what is being shown.
-class GroundedHook(BaseModel):
-    on_screen: str
-    viral_hook_text: str
-    video_title_for_youtube_short: str
 
 
 GROUNDED_HOOK_PROMPT = """
@@ -126,12 +73,6 @@ TRANSCRIPT:
 Return only:
 {{"on_screen": "<one line>", "viral_hook_text": "<max 10 words>", "video_title_for_youtube_short": "<max 100 chars>"}}
 """
-
-
-class LayoutChoice(BaseModel):
-    layout: str
-    confidence: float
-    why: str
 
 
 # Scored 94/92/96% over the 48-clip corpus against hand-checked labels, with
@@ -169,18 +110,6 @@ you would defend it to an editor. If you are unsure, answer "none".
 
 confidence is 0..1. why is at most 12 words.
 """
-
-
-class ShotContentModel(BaseModel):
-    shot: int
-    kind: str
-    focus_left: float
-    focus_right: float
-    presenter_cam: bool
-
-
-class ShotContentResponse(BaseModel):
-    shots: List[ShotContentModel]
 
 
 # One still per SHOT of a clip, asked as a closed choice (same lesson as
@@ -363,61 +292,6 @@ Return only:
   ]
 }}
 """
-
-
-def _strip_code_fences(text: str) -> str:
-    text = (text or "").strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines:
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    return text
-
-
-def _extract_json_candidate(text: str) -> str:
-    cleaned = _strip_code_fences(text)
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return cleaned[start:end + 1]
-    return cleaned
-
-
-def _escape_invalid_unicode_escapes(text: str) -> str:
-    chars = []
-    i = 0
-    while i < len(text):
-        if text[i] == "\\" and i + 1 < len(text) and text[i + 1] == "u":
-            hex_digits = text[i + 2:i + 6]
-            if len(hex_digits) < 4 or any(ch not in "0123456789abcdefABCDEF" for ch in hex_digits):
-                chars.append("\\\\u")
-                i += 2
-                continue
-        chars.append(text[i])
-        i += 1
-    return "".join(chars)
-
-
-def _parse_json_response_text(text: str) -> dict:
-    if not text:
-        raise ValueError("Gemini returned an empty response body.")
-    candidate = _extract_json_candidate(text).replace("\x00", "").strip()
-    if not candidate:
-        raise ValueError("Gemini response did not contain a JSON object.")
-    parse_attempts = [candidate]
-    sanitized_candidate = _escape_invalid_unicode_escapes(candidate)
-    if sanitized_candidate != candidate:
-        parse_attempts.append(sanitized_candidate)
-    last_error: Optional[Exception] = None
-    for parse_candidate in parse_attempts:
-        try:
-            return json.loads(parse_candidate)
-        except json.JSONDecodeError as e:
-            last_error = e
-    raise ValueError(f"Failed to parse Gemini JSON response: {last_error}")
 
 
 def upload_media(client, path, mime_type=None):

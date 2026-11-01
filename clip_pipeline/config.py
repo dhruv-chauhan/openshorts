@@ -22,12 +22,28 @@ class FoundryConfig(Contract):
     api_key_env: EnvName | None = None
     timeout_seconds: Annotated[float, Field(gt=0, le=600)] = 120.0
     max_attempts: Annotated[int, Field(ge=1, le=5)] = 3
+    identity_scope: Literal["https://ai.azure.com/.default", "https://cognitiveservices.azure.com/.default"] = "https://ai.azure.com/.default"
+    managed_identity_client_id: Annotated[str, Field(
+        pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    )] | None = None
+    structured_outputs: Literal[True] = True
+    output_token_parameter: Literal["max_completion_tokens", "max_tokens"] = "max_completion_tokens"
+    max_output_tokens: Annotated[int, Field(ge=128, le=32768)] = 4096
+    temperature: Annotated[float, Field(ge=0, le=2)] | None = None
+    reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = None
+    # Deployment-specific USD per million tokens; absent prices mean unknown cost.
+    prices: dict[str, "TokenPrices"] = Field(default_factory=dict)
 
     @field_validator("endpoint")
     @classmethod
     def inference_url(cls, value):
         clean_https_url(value)
-        if urlsplit(value).path.rstrip("/") != "/openai/v1":
+        parsed = urlsplit(value)
+        if (not (parsed.hostname or "").endswith((".openai.azure.com", ".services.ai.azure.com",
+                                                   ".cognitiveservices.azure.com")) or
+                parsed.port not in (None, 443)):
+            raise ValueError("expected a public Azure inference host")
+        if parsed.path.rstrip("/") != "/openai/v1":
             raise ValueError("expected an Azure OpenAI /openai/v1 inference endpoint")
         return value.rstrip("/") + "/"
 
@@ -35,7 +51,14 @@ class FoundryConfig(Contract):
     def auth_combination(self):
         if (self.auth_mode == "api_key") != (self.api_key_env is not None):
             raise ValueError("api_key mode requires only a secret environment-variable reference")
+        if self.managed_identity_client_id and self.auth_mode != "managed_identity":
+            raise ValueError("client ID is only valid with managed identity")
         return self
+
+
+class TokenPrices(Contract):
+    input_per_million: Annotated[float, Field(ge=0)]
+    output_per_million: Annotated[float, Field(ge=0)]
 
 
 class ApiMarkets(Contract):
@@ -137,6 +160,12 @@ class PipelineConfig(Contract):
     media: MediaConfig = Field(default_factory=MediaConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
+
+    @model_validator(mode="after")
+    def model_budget(self):
+        if self.foundry.max_output_tokens >= self.selection.context_budget_tokens:
+            raise ValueError("context budget must leave room for input and reserved output")
+        return self
 
 
 def resolve_path(value: str, relative_to: Path) -> Path:

@@ -32,6 +32,8 @@ the face classifier sent to GENERAL are taken as the screen (``fallback_ranges``
 because the job was declared a screencast and GENERAL is the one layout that
 shrinks a screen into an unreadable strip.
 """
+
+from clip_pipeline.profile import clip_only_mode
 import json
 import os
 
@@ -363,7 +365,7 @@ def detect_content_ranges(video_path, scenes, fps):
     differently from []: the user asked for this layout, so a failed check must
     not quietly hand the clip back to the face classifier (see fallback_ranges).
     """
-    if not ENABLED:
+    if clip_only_mode() or not ENABLED:
         return []
     if not scenes:
         return None
@@ -376,8 +378,7 @@ def detect_content_ranges(video_path, scenes, fps):
     asked = shots_to_ask(scenes)
     print(f"   🔎 Screen check on {len(asked)} shot(s)…")
     try:
-        from google import genai
-        from google.genai import types as genai_types
+        from llm_google import genai, genai_types
         import gemini_worker
 
         frames = _shot_frames(video_path, scenes, asked)

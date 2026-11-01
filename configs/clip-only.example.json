@@ -7,7 +7,12 @@
     "relevance_deployment": "YOUR-DEPLOYMENT",
     "selection_deployment": "YOUR-DEPLOYMENT",
     "audit_deployment": "YOUR-DEPLOYMENT",
-    "auth_mode": "managed_identity"
+    "auth_mode": "managed_identity",
+    "structured_outputs": true,
+    "output_token_parameter": "max_completion_tokens",
+    "max_output_tokens": 4096,
+    "temperature": null,
+    "reasoning_effort": null
   },
   "markets": {
     "mode": "api",
