@@ -5,7 +5,9 @@ Foundry adapter and a zero clip minimum. It never calls the legacy selectors
 described below, including the silent-video fallback. Its CLI supports input preparation, model preflight, manual story rendering,
 and market-policy selection from reusable source/transcript artifacts. The policy
 selector evaluates all windows and emits complete story plans or explicit no-match/
-review outcomes; final-media audits remain a later phase. The existing application keeps the legacy selection behavior.
+review outcomes. Phase D.1 optionally pins reviewed category/exposure profiles and
+separates direct spoken matches from inferred market associations. Its one-hop candidate
+assessment cannot change allowed membership or source-attributed stance; final-media audits remain a later phase. The existing application keeps the legacy selection behavior.
 
 ## How many clips a job returns (`clip_selection.py`, `main.get_viral_clips`)
 

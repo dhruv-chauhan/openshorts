@@ -152,21 +152,54 @@ def resolve_drafts(response, segments):
                                            'explanation': response.explanation})
 
 
-def select_stories(config, source, transcript, policy, markets, call):
+def select_stories(config, source, transcript, policy, markets, call, *, knowledge=None, assessed_on=None):
     """call() is a durable, budgeted Foundry operation supplied by the controller."""
+    from datetime import date
+    from .enrichment import enrich_story
+    from .selection_contracts import EnrichedRelevanceResponse, EnrichedDraftResponse
+    enriched = config.enrichment.mode == 'snapshot'
+    if enriched != (knowledge is not None):
+        raise ValueError('enrichment mode/snapshot mismatch')
+    assessed_on = assessed_on or date.today().isoformat()
+    prompt_set = prompts.snapshot(enriched)
+    relevance_model = EnrichedRelevanceResponse if enriched else RelevanceResponse
+    draft_model = EnrichedDraftResponse if enriched else DraftResponse
     windows = windows_for(transcript, config.selection)
     shared = {'policy': policy.model_dump(mode='json'),
               'markets_columns': ['market_id', 'underlying_name', 'asset_type', 'aliases'],
               'markets': [[m.market_id, m.underlying_name, m.asset_type, m.aliases]
                           for m in markets.markets if m.enabled],
               'published_at': source.published_at.isoformat() if source.published_at else None}
-    batches = []
-    for offset in range(0, len(windows), config.selection.relevance_batch_windows):
-        batches.extend(batch_payloads(windows[offset:offset + config.selection.relevance_batch_windows],
-            system=prompts.RELEVANCE, response_model=RelevanceResponse,
-            context_budget=config.selection.context_budget_tokens, output_tokens=config.foundry.max_output_tokens,
-            shared=shared))
-    decisions = []
+    if enriched:
+        shared['knowledge'] = knowledge.model_dump()
+    for window in windows:
+        segments = transcript.segments[window['first']:window['last']+1]
+        window['spoken_market_ids'] = []
+        for market in markets.markets:
+            if not market.enabled:
+                continue
+            try:
+                check_spoken_market_names(StorySpec(story_id='window', title=window['window_id'],
+                    span=TimeSpan(start=segments[0].start, end=segments[-1].end),
+                    matched_market_ids=[market.market_id]), markets, transcript)
+            except ValueError:
+                continue
+            window['spoken_market_ids'].append(market.market_id)
+    batches, decisions, coverage_complete = [], [], True
+    try:
+        for offset in range(0, len(windows), config.selection.relevance_batch_windows):
+            batches.extend(batch_payloads(windows[offset:offset + config.selection.relevance_batch_windows],
+                system=prompt_set['relevance'], response_model=relevance_model,
+                context_budget=config.selection.context_budget_tokens, output_tokens=config.foundry.max_output_tokens,
+                shared=shared))
+    except FoundryError as exc:
+        if exc.code != 'context_budget_exceeded':
+            raise
+        from .selection_contracts import WindowDecision
+        batches, coverage_complete = [], False
+        decisions = [WindowDecision(window_id=w['window_id'], decision='review', topic_path=None,
+            matched_market_ids=[], connection='', evidence=[], continues_before=False, continues_after=False,
+            reason='not_evaluated: complete window and knowledge exceed context budget') for w in windows]
     for batch in batches:
         expected = {w['window_id']: w for w in batch['items']}
         def validate(response):
@@ -181,11 +214,11 @@ def select_stories(config, source, transcript, policy, markets, call):
                     span=TimeSpan(start=segments[0].start, end=segments[-1].end),
                     matched_market_ids=w.matched_market_ids), markets, transcript)
                 check_evidence(w.evidence, segments)
-        response = call('relevance', prompts.RELEVANCE, batch, RelevanceResponse, validate)
+        response = call('relevance', prompt_set['relevance'], batch, relevance_model, validate)
         by_id = {w.window_id: w for w in response.windows}
         decisions.extend(by_id[w['window_id']] for w in batch['items'])
     assert len(decisions) == len(windows)
-    regions = regions_for(windows, decisions)
+    regions = regions_for(windows, decisions) if coverage_complete else []
     review_reasons = [f'{w.window_id}: {w.reason}' for w in decisions if w.decision == 'review']
     proposals, checks, accepted, withheld, boundary_flags = [], [], [], [], []
     for region_id, (first, last) in enumerate(regions):
@@ -219,7 +252,7 @@ def select_stories(config, source, transcript, policy, markets, call):
                                          stories=[_story_spec(s) for s in sequence.stories]))
             validate_plan_transcript(_plan(source, transcript, seqs), source, transcript, config)
         try:
-            response = call('selection', prompts.PROPOSE, payload, DraftResponse, validate_proposals)
+            response = call('selection', prompt_set['proposal'], payload, draft_model, validate_proposals)
         except FoundryError as exc:
             if exc.code != 'context_budget_exceeded':
                 raise
@@ -233,6 +266,25 @@ def select_stories(config, source, transcript, policy, markets, call):
             for j, story in enumerate(sequence['stories']):
                 story['story_id'] = f'r{region_id}-q{i}-s{j}'
         response = ProposalResponse.model_validate(local)
+        association_withheld = set()
+        if enriched:
+            enriched_sequences = []
+            for sequence in response.sequences:
+                stories = []
+                for story in sequence.stories:
+                    metadata = enrich_story(story, transcript, knowledge, markets, config.enrichment,
+                                            call, assessed_on=assessed_on)
+                    story = story.model_copy(update={'enrichment': metadata})
+                    if not metadata.coverage_complete:
+                        review_reasons.extend(f'{story.story_id}: {reason}' for reason in metadata.review_reasons)
+                    if story.topic_path == 'market_exposure' and not any(
+                            a.decision == 'supported' for a in metadata.associations):
+                        association_withheld.add(sequence.sequence_id)
+                        if not metadata.coverage_complete or any(a.decision == 'needs_review' for a in metadata.associations):
+                            review_reasons.append(f'{story.story_id}: unresolved required exposure')
+                    stories.append(story)
+                enriched_sequences.append(sequence.model_copy(update={'stories': stories}))
+            response = response.model_copy(update={'sequences': enriched_sequences})
         for sequence in response.sequences:
             for story in sequence.stories:
                 for reason in boundary_reviews(story, transcript):
@@ -255,7 +307,7 @@ def select_stories(config, source, transcript, policy, markets, call):
                     if len(rules) != len(rule_ids) or {r.rule_id for r in rules} != rule_ids:
                         raise ValueError('incomplete policy rule checks')
         try:
-            checked = call('selection', prompts.CHECK, {**payload, 'proposals': response.model_dump()},
+            checked = call('selection', prompt_set['check'], {**payload, 'proposals': response.model_dump()},
                            SelectionReview, validate_checks)
         except FoundryError as exc:
             if exc.code != 'context_budget_exceeded':
@@ -272,6 +324,9 @@ def select_stories(config, source, transcript, policy, markets, call):
                 review_rules = {r.rule_id for r in policy.rules if r.severity == 'review'}
                 if any(r.result == 'review' or (r.result == 'reject' and r.rule_id in review_rules) for r in rules):
                     review_reasons.append(f'{sequence.sequence_id}: policy uncertainty')
+                continue
+            if sequence.sequence_id in association_withheld:
+                withheld.append({'sequence_id': sequence.sequence_id, 'reason': 'no_supported_exposure'})
                 continue
             seq = StorySequence(sequence_id=sequence.sequence_id, title=sequence.title,
                                 stories=[_story_spec(s) for s in sequence.stories])
@@ -293,7 +348,7 @@ def select_stories(config, source, transcript, policy, markets, call):
                 seen.add(item.sequence_id)
             if seen != ids:
                 raise ValueError('incomplete global ranking')
-        ranking = call('selection', prompts.RANK, {**shared, 'sequences': [p.model_dump() for p, _ in accepted]},
+        ranking = call('selection', prompt_set['rank'], {**shared, 'sequences': [p.model_dump() for p, _ in accepted]},
                        RankingResponse, validate_ranking)
         by_id = {s.sequence_id: s for _, s in accepted}
         accepted = []
@@ -309,16 +364,21 @@ def select_stories(config, source, transcript, policy, markets, call):
     plan = _plan(source, transcript, accepted)
     validate_plan_config(plan, config)
     validate_plan_transcript(plan, source, transcript, config)
-    report = {'schema_version': '1', 'prompt_version': prompts.PROMPT_VERSION, 'approved': False,
+    report = {'schema_version': '1', 'prompt_version': prompt_set['version'], 'approved': False,
               'audit_performed': False, 'windows': [d.model_dump() for d in decisions],
-              'coverage_complete': True, 'regions': regions, 'proposals': proposals, 'checks': checks,
+              'coverage_complete': coverage_complete, 'regions': regions, 'proposals': proposals, 'checks': checks,
               'ranking': ranking.model_dump() if ranking else None, 'withheld': withheld,
               'boundary_reviews': boundary_flags,
               'review_reasons': review_reasons,
               'outcome': 'needs_review' if review_reasons else 'selected' if accepted else 'completed_no_matches'}
+    if enriched:
+        report['knowledge'] = knowledge.model_dump()
+        report['assessed_on'] = assessed_on
     binding = {'markets': digest(markets), 'policy': digest(policy),
-               'prompts': digest([prompts.PROMPT_VERSION, prompts.RELEVANCE, prompts.PROPOSE, prompts.CHECK, prompts.RANK]),
+               'prompts': prompts.binding(prompt_set),
                'settings': digest(config), 'report': digest(report)}
+    if enriched:
+        binding['enrichment'] = digest(knowledge)
     # Ambiguous coverage is explicit; retain proposals for review, withhold rendering.
     data = plan.model_dump() | {'selection_method': 'foundry', 'selection_binding': binding}
     if review_reasons:
@@ -343,8 +403,10 @@ def validate_selection_checkpoint(manifest, directory, config):
     policy = read_json_model(path('policy'), TopicPolicy)
     saved_prompts = json.loads(path('prompts').read_text())
     expected = {'markets': digest(markets), 'policy': digest(policy), 'settings': digest(config),
-                'report': digest(report), 'prompts': digest([saved_prompts[k] for k in
-                    ['version', 'relevance', 'proposal', 'check', 'rank']])}
+                'report': digest(report), 'prompts': prompts.binding(saved_prompts)}
+    if config.enrichment.mode == 'snapshot':
+        from .enrichment_contracts import KnowledgeSnapshot
+        expected['enrichment'] = digest(read_json_model(path('enrichment'), KnowledgeSnapshot))
     if plan.selection_method != 'foundry' or plan.selection_binding != expected:
         raise ArtifactError('selection provenance mismatch')
     source = read_json_model(path('source'), SourceArtifact)
@@ -355,5 +417,5 @@ def validate_selection_checkpoint(manifest, directory, config):
     if report['outcome'] != expected_outcome or (expected_outcome == 'selected') != bool(plan.sequences):
         raise ArtifactError('selection outcome/plan mismatch')
     expected_ids = [w['window_id'] for w in windows_for(transcript, config.selection)]
-    if not report['coverage_complete'] or [w['window_id'] for w in report['windows']] != expected_ids:
+    if (not report['coverage_complete'] and expected_outcome != 'needs_review') or [w['window_id'] for w in report['windows']] != expected_ids:
         raise ArtifactError('selection coverage mismatch')

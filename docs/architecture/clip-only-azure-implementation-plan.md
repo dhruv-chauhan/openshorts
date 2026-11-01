@@ -2,7 +2,7 @@
 
 Date: 2026-11-01  
 Repository baseline reviewed: `459716b`  
-Status: Phases A–C.1 implemented and pushed; Phase C is `ac14215`, C.1 is `1c83090`. Phase D is implemented locally and its execution path is validated. The reference run completes with `needs_review` and withholds its story proposals; editorial refinement remains before moving to Phase E. Final-media audits, approval and Azure worker deployment remain unimplemented. See the [clip-only runbook](../clip-only-runbook.md) for commands and limitations.
+Status: Phases A–D implemented and pushed; Phase C is `ac14215`, C.1 is `1c83090`, and D is `ff9f680`. Phase D's execution path and exit criteria are validated; the reference run completes with `needs_review` and withholds its story proposals. Phase D.1 is implemented and validated locally (uncommitted): reviewed market classification and exposure matching precede Phase E. The corrected-catalog baseline and enriched reference both return `needs_review`; no content approval is claimed. Editorial refinement, final-media audits, approval and Azure worker deployment remain outstanding. See the [clip-only runbook](../clip-only-runbook.md) for commands and limitations.
 
 ## 1. Outcome and scope
 
@@ -20,6 +20,7 @@ The eventual workload is a configurable list of third-party channels and a daily
 - Microsoft Foundry for all baseline LLM calls; no Google/Gemini network calls or credentials required.
 - Two relevance paths: allowed underlying market/company OR equity-market macroeconomic relevance.
 - A backend API supplies the allowed-market list. A deliberately selected local snapshot supports development before the endpoint exists.
+- Phase D.1 adds separately versioned market profiles: preserve the spoken story subjects, allow multiple relevant categories and evidenced affected markets, and keep inferred exposure distinct from attributed source claims. Profiles cannot grant market eligibility.
 - Zero qualifying clips is a normal successful outcome.
 - One coherent market discussion per sequence; independent discussions become separate sequences. Preserve questions, claims, evidence, conditions, attribution and opposing views where needed for meaning.
 - Separate, independently addressable story files plus a versioned ordered sequence manifest for the consuming app. No stitched compilation, generated bridging narration, cross-video assembly or app implementation in this milestone.
@@ -60,6 +61,7 @@ Manual CLI submission
   -> ingest exact source + record provenance and media hash
   -> load validated transcript OR transcribe once
   -> assess every transcript window -> map complete discussions and context dependencies
+  -> classify discussions using pinned profiles -> validate direct and inferred market associations (D.1)
   -> propose ordered story sequences -> snap complete boundaries -> deterministic validation
   -> render each contiguous story separately to staging, with optional modest speed adjustment
   -> inspect media + transcribe final audio + audit each story and the sequence
@@ -115,6 +117,7 @@ Store nonsecret settings in validated JSON, with secrets/identity supplied separ
 | Authentication | Managed identity on Azure; developer identity locally; explicit secret-backed key mode only if required |
 | Market source | `api` or explicit development `snapshot`; no silent switch between them |
 | Topic policy | Versioned policy file; separate from market membership |
+| Enrichment (D.1) | Explicit `off` baseline or reviewed local snapshot; versioned taxonomy, profiles, sources and bounded direct relationships. Configure freshness/materiality rules and candidate/context budgets; never silently invent missing profiles. |
 | Selection | Complete discussions and ordered stories; zero eligible output allowed. Provisional preferred total viewing time 60–180 seconds per sequence, not per story and not a mandatory floor/ceiling. Story length follows local completion; configurable hard duration/count/compute limits route incomplete proposals to review or failure, never silent truncation. |
 | Story budgets | Separate maximum sequences, maximum stories per sequence, story/sequence duration limits and token budgets. Maximum five stories per sequence is an initial configurable review budget, not an instruction to drop necessary context. |
 | Media | Fixed 9:16; target 1080x1920, H.264/AAC, square pixels; separate contiguous story files; original audio; captions on; hook overlay off initially |
@@ -233,6 +236,10 @@ Represent rules with stable IDs, severity (`reject` or `review`), rationale, and
 
 ### Selection algorithm
 
+Phase D implements the direct-market/macro baseline below. Phase D.1 extends discussion
+classification and association validation without changing source fidelity, story
+completion, full coverage or sequence ordering. Its detailed contract is in Section 11.
+
 1. Normalize transcript segments and word timestamps, assign stable IDs, and evaluate all overlapping windows in bounded batches. Windows are model input units, not final story boundaries.
 2. Map complete discussions across windows: subject/markets, attributed speakers, questions, claims, evidence, qualifications, conclusions, timestamps and context dependencies. Reconcile adjacent-window duplicates before proposing stories.
 3. Validate complete coverage, allowed market IDs and exact evidence references. Missing responses are operational errors, not negative relevance decisions. Review the full source before applying output budgets.
@@ -251,10 +258,10 @@ Transcript artifacts include schema version, source content hash, video ID when 
 Use content hashes rather than filename/duration alone for cache identity. Keep separate keys:
 
 - Transcript: source media hash + ASR configuration/version.
-- Selection: transcript hash + market snapshot + policy/prompt/schema versions + deployment configuration.
+- Selection: transcript hash + market snapshot + policy/prompt/schema versions + deployment configuration; D.1 also binds the enrichment mode and exact taxonomy/profile/relationship snapshot hashes.
 - Story render: source hash + contiguous span + playback rate + caption/hook text + render settings/code version. Sequence order is not baked into the media.
 - Sequence: ordered story IDs/final hashes + labels + topic/stance/context metadata + policy/schema versions.
-- Audit: exact story media hashes and sequence manifest hash + source context/omitted intervals + audit policy/prompt/model configuration.
+- Audit: exact story media hashes and sequence manifest hash + source context/omitted intervals + audit policy/prompt/model configuration; D.1 associations and their pinned knowledge/evidence references also form part of the audit input.
 
 A policy change can reuse source/ASR but invalidates selection and subsequent approval. A caption or hook change invalidates final audit even if boundaries are unchanged. An audit-only change reuses rendered candidates. A resume validates checksums; incomplete files never count as checkpoints.
 
@@ -471,7 +478,7 @@ Exit: a manually authored plan produces multiple independently playable captione
 
 ### D. Market policy and topic-aware story selection
 
-Implemented locally through a separate `select` CLI over Phase C source/transcript artifacts. `resume --selection-only` retains immutable inputs, validated model responses and usage reservations committed before requests. No render starts during selection. A selected plan binds source/transcript, policy, market snapshot, prompt, settings and report hashes; it can later be inspected and supplied to C.1's renderer.
+Implemented and pushed in `ff9f680` through a separate `select` CLI over Phase C source/transcript artifacts. `resume --selection-only` retains immutable inputs, validated model responses and usage reservations committed before requests. No render starts during selection. A selected plan binds source/transcript, policy, market snapshot, prompt, settings and report hashes; it can later be inspected and supplied to C.1's renderer.
 
 The user requested a development mock containing every market in the TradeXYZ specification index. The explicit `mock_api` transport uses the same bounded HTTP/schema/ETag path as production and pins 120 unique entries retrieved on 2026-11-01: 118 standard-index instruments plus Live pre-IPO ANT and OURA. All eight Converted pre-IPO entries already exist in the standard set and are not duplicated. It is not the production Megastocks allowlist. The API provider supports bounded transient retries and fresh-cache reuse, rejects authentication/schema/redirect failures, and records provenance. No promotion-time refresh is claimed before E.
 
@@ -492,9 +499,251 @@ Live validation led to three concrete safeguards: matched market IDs require a s
 
 Exit: synthetic positive, negative, macro-only, ambiguous-name, mixed/unclear stance and adversarial transcript cases behave correctly. Context crosses input-window boundaries without loss; question/answer and claim/qualification cases produce complete chronological stories. A valid no-match run emits no sequences and terminates without an empty render pool or manufactured clips. Legacy floor tests still pass.
 
+### D.1. Reviewed market classification and exposure matching
+
+**Status and objective:** implemented locally after D and before E; not yet committed. Identify
+complete stories on their own terms, then associate them with one or more relevant
+business categories and allowed markets. Avoid forcing a multi-company argument onto
+one named ticker. Preserve D's direct-market and equity-macro paths as a measurable
+baseline. No graph database, automated research agent or new Azure resource is needed.
+
+#### Implementation and validation record
+
+D.1 adds `enrichment_contracts.py` and `enrichment.py`, explicit off/snapshot
+configuration, versioned optional story metadata, pinned knowledge in selection and
+render runs, and hash-compatible loading of older plans. The selector classifies
+complete proposed discussions, evaluates bounded candidates from memberships and one
+relationship edge, and independently checks supported associations with the existing
+pre-render policy pass. Direct spoken IDs retain their original semantics. Optional
+uncertain/unsupported links remain diagnostics; unresolved required exposure or context
+coverage withholds rendering. An unsupported exposure cannot hide an independent
+source-policy uncertainty. Shared-context overflow reports unevaluated coverage rather
+than truncating knowledge or returning no matches.
+
+The six-entity pilot has overlapping model/cloud/accelerator categories and two sourced
+customer links. Manufacturing is a defined category with no curated members yet; scale
+is explicitly unknown. The reviewed public pilot and the separate fictional example
+are documented in `configs/development/README.md`. Profile gaps remain visible; there
+is no claim of comprehensive knowledge for all 120 allowed markets. No external research
+or relationship discovery happens during inference.
+
+The real baseline initially rejected direct IDs assigned to windows without a spoken
+name. Both comparison modes now use prompt v4 and deterministic spoken-ID hints; the
+validator remains strict. Classification also receives spoken-entity hints. Dates must
+be explicit full calendar dates in source evidence; publication dates and partial dates
+cannot silently establish temporal applicability. This conservative pilot rule and
+window-level continuation ambiguity can increase review volume. They remain visible
+limitations, not evidence that the source lacks relevant content.
+
+Validation: **1,654 backend tests passed, 57 skipped; 194 isolated tests passed with one
+legacy compatibility skip.** Thirty-three enrichment tests cover references/cycles,
+multiple associations, source evidence, disabled/unknown IDs, one-hop traversal,
+freshness/conflicts/dates, no-match versus uncertainty, bounded coverage, escaped
+previews, pinned resume, metadata preservation and knowledge changes. The real C.1
+checkpoint still loads unchanged in the existing no-Google media image with networking
+disabled; the prior D checkpoint still validates. Seven opt-in live synthetic cases
+passed, with all three expected supported market links retained and no unexpected
+supported links. Those small labeled counts are not production precision estimates.
+
+The reference comparison reused identical source/transcript, the corrected 120-market
+snapshot, source policy and Foundry settings. The baseline proposed two stories in five
+calls (62,139 reported tokens). The enriched run also proposed two stories, with changed
+grouping, in ten calls (108,294 reported tokens), including one rejected classification
+response followed by a successful bounded repair. It identified AI-model, cloud and
+accelerator categories and supported the directly discussed markets. Nine association
+candidates required review and two were unsupported; no inferred market association
+was promoted to supported. Both runs returned `needs_review` and withheld all rendering,
+including a cut beginning inside an ASR sentence and unresolved numerical/date/context
+issues. Temporal overlap with the earlier manual reference spans was unchanged; this
+is not a semantic-completeness or full-video recall result. The extra model work is a
+measured pilot cost, not a throughput benchmark.
+
+The ignored local `output/clip-media-smoke/phase-d1-validation.json` records both runs,
+source/policy/model/snapshot hashes, coverage, review reasons, usage and preview paths.
+`phase-d1-editorial-smoke.json` records the synthetic cases. Completed selection resumes
+were checked without additional inference. Separate-story rendering carries the exact
+knowledge snapshot and association metadata forward, but new reference media was not
+rendered because the selection gate withheld it. Phase E still owns final-audio/media
+assessment, manual approval and storage promotion.
+
+#### Scope and first iteration
+
+- Start with a reviewed, versioned JSON knowledge snapshot beside the allowlist. Keep
+  authoritative membership and editorial enrichment independently replaceable; the
+  backend API continues to decide which instruments are enabled.
+- Cover a small AI-focused subset first: model developers, semiconductor designers,
+  manufacturing/memory where relevant, cloud operators and infrastructure exposures.
+  These are overlapping categories, not a claim that every member benefits from the
+  same event. Add geography and selected macro sensitivities where supported.
+- Include a few sourced, direct supplier/customer/competitor/ownership relationships
+  only where they improve an actual test case. Limit traversal to one curated edge.
+  Larger dependency coverage is a follow-on iteration, not a prerequisite for D.1.
+- Keep separate source spans, chronological story manifests and 1.0× automatic
+  playback. Do not add concatenation, external facts to spoken captions, channel
+  monitoring, new rendering features, publishing or final-media approval here.
+
+#### Contracts and knowledge curation
+
+Define typed, versioned contracts; settle exact field names during implementation.
+
+| Record | Required meaning and constraints |
+|---|---|
+| Taxonomy | Stable category IDs, definitions, inclusion/exclusion examples and optional parent IDs; distinguish sector, business role, end market, geography and macro sensitivity. Validate references and reject parent cycles. |
+| Entity/profile | Stable entity identity and explicit aliases; separate links to zero or more market IDs; multiple sourced category memberships and exposure attributes. Nontradeable supporting entities are allowed in knowledge but never become enabled instruments. |
+| Scale/exposure | Optional, defined qualitative bands or sourced measurements with units, scope, period and as-of date. Unknown remains null. Do not infer economic scale from a ticker price or pre-IPO status, or invent revenue weights and materiality scores. |
+| Relationship | Stable ID, directed endpoints, a typed relation and scoped explanation; source references, verification date and applicable dates where known. Do not infer reciprocal or transitive economic effects from the edge alone. |
+| Evidence source | Stable ID, citation URL/document reference, supporting excerpt or factual summary, retrieval/verification date and temporal applicability. Content is untrusted data; inference does not fetch arbitrary model-supplied URLs. |
+| Snapshot | Schema/revision, taxonomy/profiles/relationships/source records and content hashes. Pin the exact snapshot in each run; report explicit coverage gaps and stale or conflicting records. |
+
+Use issuer disclosures and other authoritative sources for initial manual curation.
+Model-assisted drafts may help preparation but require review before entering the
+accepted snapshot. Public examples use synthetic entities; no private backend details
+or credentials enter tracked fixtures. Changing a market from pre-IPO to standard
+does not silently change its underlying entity or duplicate its profile. Different
+instruments on one issuer remain distinct market IDs.
+
+Freshness must be explicit and configurable by record type. Stable industry labels
+and changing commercial relationships need different review intervals. Preserve
+both when a fact was verified and when it applied; never use a later relationship to
+explain an earlier event without evidence of temporal applicability. Unknown event
+dates or stale facts cannot silently support a time-sensitive inferred association.
+
+#### Story and association output
+
+Separate three concepts in the selection report and downstream story metadata:
+
+1. **Source subjects / mentioned markets:** entities actually discussed, resolved from
+   spoken names/aliases and context, with exact transcript evidence. Keep D's lexical
+   identity check for direct market matches; passing mentions still do not qualify.
+2. **Affected categories:** one or more categories tied to the discussed event or
+   argument, with a concrete economic mechanism and supporting transcript spans.
+   Category membership generates candidates; it does not prove significant impact.
+3. **Affected allowed markets:** direct or inferred associations with typed basis,
+   mechanism, materiality rationale, transcript evidence, knowledge-record IDs and
+   decision (`supported`, `needs_review`, `unsupported`). Final IDs must intersect the
+   current enabled universe. Do not place an inferred ID into a field claiming that
+   its name was spoken.
+
+Keep source-attributed price stance separate from inferred exposure. Each market can
+have different or uncertain exposure; absence of a directional statement remains
+`unclear`. Do not copy one speaker's bullish/bearish label onto an entire category.
+Inferred associations are explicitly labeled editorial metadata and cannot be
+presented as quotes, forecasts made by the speaker, or facts heard in the clip.
+
+Version the new story/selection metadata and define backward-compatible loading for
+D and C.1 artifacts. Existing `matched_market_ids` retains its direct-match meaning;
+introduce separate typed associations rather than silently changing that field.
+The renderer must preserve the metadata through the sequence manifest, without
+changing source audio or adding inferred claims to captions/titles. Metadata may not
+repair an incomplete spoken idea or justify cutting away a necessary qualification.
+
+#### Selection integration and safeguards
+
+1. Pin config, policy, allowlist and enrichment before inference. An explicit `off`
+   mode reproduces D's baseline; invalid configured snapshots fail clearly rather
+   than falling back silently. Missing profiles leave direct and macro matching
+   available and expose a coverage gap; they do not create speculative matches.
+2. Assess every source window for subjects, events, economic mechanisms and context
+   dependencies before making final ticker-specific exclusions. A potentially relevant
+   discussion must reach association evaluation even when no allowed ticker is named.
+   Reconstruct complete discussions using D's bounded context handling.
+3. Resolve subject identities, assign multiple categories, and build candidate market
+   associations from explicit memberships/exposure rules and at most one curated edge.
+   Do not enumerate every category member as an affected market by default. Bound
+   payloads and fan-out; unresolved coverage caused by a hard budget is review-required,
+   not proof of no matches. Evaluate the candidate set before output count limits.
+4. Require a source-established event/argument plus a sourced, applicable exposure
+   mechanism and a qualitative materiality rationale for each inferred association.
+   A relationship alone, weak sector similarity or self-reported model confidence is
+   insufficient. Validate IDs, evidence, allowed membership and knowledge references
+   deterministically; check economic reasoning in the pre-render policy pass.
+5. An inferred allowed-market association can establish relevance only when all of
+   those checks pass. A category tag alone cannot. Preserve macro-only eligibility
+   without manufactured ticker IDs. Preserve complete story boundaries regardless of
+   which market/category eventually qualifies it.
+6. Record and exclude unsupported optional associations without invalidating an
+   independently eligible direct/macro story. If the story's only eligibility depends
+   on an unresolved association, return `needs_review`. Material source ambiguity or
+   an unresolved required sequence decision continues to withhold the render plan;
+   do not silently discard a necessary story to obtain a passing sequence.
+7. Rank and deduplicate complete sequences only after relevance and association checks.
+   Explain accepted, rejected and unresolved associations in the local preview, with
+   source evidence and knowledge citations clearly distinguished. Extra matched markets
+   must not mechanically inflate usefulness or displace a better complete argument.
+
+#### Reuse, audit handoff and implementation files
+
+Include enrichment mode, snapshot hashes, association contracts and prompt versions
+in selection/cache bindings. A changed taxonomy, relationship, profile, policy or
+allowlist requires a new selection decision; an interrupted resume uses its original
+pinned inputs. Reuse the source and transcript. Preserve existing manual-plan hashes
+and old-run inspection through explicit version handling. Compatible media reuse is
+allowed only under existing render rules; broader cross-run caching stays deferred.
+
+Phase E must independently inspect every displayed/eligibility-bearing association
+against the final story audio, original context and the same pinned knowledge. It
+must also check that editorial inferences are not attributed to the speaker. A change
+to association metadata invalidates sequence approval even if media bytes are unchanged.
+At promotion, refresh membership and check configured knowledge freshness; relevant
+changes require reevaluation and new approval, never silent mutation of an old result.
+
+Planned file changes:
+
+| Files | Responsibility |
+|---|---|
+| New `clip_pipeline/enrichment.py` and `enrichment_contracts.py` | Validated snapshot loading, reference/temporal checks, profile lookup and bounded candidate generation; separate from authoritative `markets.py`. |
+| `config.py`, `contracts.py`, `selection_contracts.py` | Explicit enrichment mode/path/limits, versioned subjects/categories/associations, provenance bindings and compatibility handling. |
+| `selection_prompts.py`, `selection.py` | Discussion-first classification, direct versus inferred checks, materiality reasoning, category/market validation and unchanged global sequence ranking. |
+| `selection_runner.py`, `runner.py` | Immutable knowledge artifacts, hashing, durable resume and completed-checkpoint validation. |
+| `report.py`, `stories.py`, `execution.py` as needed | Inspectable association explanations and preservation through separate-story sequence metadata; no new media processing. |
+| New enrichment example config/snapshot under `configs/`; policy and development README | Synthetic contract examples, reviewed public pilot profiles, curation procedure, explicit coverage and policy version update. |
+| New `tests/test_clip_pipeline_enrichment.py`; selection/provider compatibility tests and editorial fixtures | Deterministic validation, adversarial and temporal cases, multiple associations, bounded coverage, resume/cache invalidation and old artifact compatibility. |
+| Runbook and this plan | Commands, baseline/enriched comparison, curation responsibilities, remaining limitations and E handoff. |
+
+#### Evaluation and exit criteria
+
+First rerun the unchanged reference sample with the corrected **120-market** catalog
+and enrichment off. The earlier 118-market run omitted ANT; it cannot serve as the
+sole comparison for measuring enrichment gains. Reuse the same source and transcript
+and hold policy/model/settings fixed for the paired comparison where compatible;
+record all differences and model-call/token usage. Do not claim missing ANT was fixed
+by classification, or require a particular number of stories/ticker assignments.
+
+Then evaluate enrichment on the same reference plus a small labeled synthetic suite:
+direct Anthropic identity/ANT resolution, a supported indirect association without a
+spoken ticker, multiple business roles with different exposure, category-only weak
+association, nonfinancial alias collision, stale or future-dated relationships,
+disabled/unknown instruments, conflicting knowledge, unsupported multi-hop links,
+macro-only content, unknown stance, missing profiles and prompt injection in both
+transcript and knowledge data. Positive indirect cases must retain enough context to
+explain their relevance; negative cases must not manufacture affected markets.
+
+Exit requires:
+
+- All deterministic contract, evidence, enabled-membership, temporal, fan-out and
+  compatibility tests pass; changed enrichment invalidates selection while source/ASR
+  stays reusable. Resume does not mix snapshot versions or repeat verified calls.
+- Reviewed examples demonstrate both multiple valid associations and rejection of
+  plausible but unsupported links. Every emitted association is inspectable through
+  transcript evidence plus applicable knowledge references; no invented IDs or
+  speaker-attributed inferences occur in the acceptance set.
+- Paired results report eligible-discussion coverage, association precision against
+  manual labels, unsupported-link count, review reasons/rate, boundary/context quality
+  and inference usage. Report small-sample counts, not population accuracy claims.
+- The reference preserves complete story progression and exposes ANT as an available
+  direct match where identity/evidence support it. Existing ASR, boundary, number or
+  date problems remain explicit review items; enrichment is not evidence of content
+  approval. No media enters approved storage before E.
+
+Planning estimate: 3–5 engineering days for contracts, a small curated category set,
+matching, provenance and focused evaluation. Broader curated dependencies may add
+3–5 engineering days plus source research; defer them until measured errors justify
+the work. Research/refresh effort depends on profile breadth. These estimates are not
+a delivery guarantee; complete profile coverage of all 120 markets is not a D.1 exit requirement.
+
 ### E. Final audit, review, and storage
 
-1. Add media checks and final-audio ASR per story, independent story/sequence semantic audits, omitted-context checks and typed decision results.
+1. Add media checks and final-audio ASR per story, independent story/sequence semantic audits, omitted-context checks and typed decision results. Audit D.1's direct/inferred associations, knowledge applicability and attribution against the final story and pinned source/knowledge evidence.
 2. Produce independent-story and sequential previews with hash-bound story and sequence reviewer decisions.
 3. Add Blob storage and approved ordered sequence manifests, final commit manifests and approval-time market refresh. A removed/changed story triggers sequence re-audit before promotion.
 

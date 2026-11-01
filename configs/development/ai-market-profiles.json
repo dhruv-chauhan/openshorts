@@ -1,0 +1,288 @@
+{
+  "schema_version": "1",
+  "version": "ai-pilot-2026-11-01-v1",
+  "categories": [
+    {
+      "category_id": "ai-models",
+      "dimension": "business_role",
+      "definition": "Developing and serving foundation models.",
+      "includes": [
+        "Model usage, inference economics and training demand"
+      ],
+      "excludes": [
+        "A generic software feature or a passing AI mention"
+      ],
+      "parent_id": null
+    },
+    {
+      "category_id": "ai-cloud",
+      "dimension": "business_role",
+      "definition": "Supplying cloud training and inference infrastructure.",
+      "includes": [
+        "Compute usage, pricing and infrastructure capacity"
+      ],
+      "excludes": [
+        "Every company that uses cloud software"
+      ],
+      "parent_id": null
+    },
+    {
+      "category_id": "ai-accelerators",
+      "dimension": "business_role",
+      "definition": "Designing accelerated computing hardware or custom AI silicon.",
+      "includes": [
+        "GPU/TPU/custom accelerator demand and compute efficiency"
+      ],
+      "excludes": [
+        "Unrelated consumer electronics"
+      ],
+      "parent_id": null
+    },
+    {
+      "category_id": "ai-manufacturing",
+      "dimension": "business_role",
+      "definition": "Fabricating or supplying memory for AI compute infrastructure.",
+      "includes": [
+        "Foundry capacity and memory demand"
+      ],
+      "excludes": [
+        "Assumed supply links without a sourced profile"
+      ],
+      "parent_id": null
+    }
+  ],
+  "entities": [
+    {
+      "entity_id": "anthropic",
+      "name": "Anthropic",
+      "aliases": [
+        "Anthropic"
+      ],
+      "market_ids": [
+        "xyz:ANT"
+      ],
+      "memberships": [
+        {
+          "record_id": "anthropic.ai-models",
+          "category_id": "ai-models",
+          "exposure": "Develops Claude models and consumes training/inference infrastructure.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-aws"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-04-20",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    },
+    {
+      "entity_id": "amazon",
+      "name": "Amazon",
+      "aliases": [
+        "Amazon",
+        "AWS",
+        "Amazon Web Services"
+      ],
+      "market_ids": [
+        "xyz:AMZN"
+      ],
+      "memberships": [
+        {
+          "record_id": "amazon.ai-cloud",
+          "category_id": "ai-cloud",
+          "exposure": "AWS supplies cloud compute; relevance to the diversified parent requires a materiality explanation.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-aws"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-04-20",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        },
+        {
+          "record_id": "amazon.ai-accelerators",
+          "category_id": "ai-accelerators",
+          "exposure": "AWS develops Trainium for AI workloads; do not infer all parent earnings move with one workload.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-aws"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-04-20",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    },
+    {
+      "entity_id": "alphabet",
+      "name": "Alphabet",
+      "aliases": [
+        "Alphabet",
+        "Google",
+        "Google Cloud"
+      ],
+      "market_ids": [
+        "xyz:GOOGL"
+      ],
+      "memberships": [
+        {
+          "record_id": "alphabet.ai-cloud",
+          "category_id": "ai-cloud",
+          "exposure": "Google Cloud supplies compute and model distribution; parent exposure is partial.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-google"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-04-06",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        },
+        {
+          "record_id": "alphabet.ai-accelerators",
+          "category_id": "ai-accelerators",
+          "exposure": "Google TPU capacity serves AI workloads; announced future capacity is not delivered capacity.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-google"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-04-06",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    },
+    {
+      "entity_id": "nvidia",
+      "name": "NVIDIA",
+      "aliases": [
+        "Nvidia"
+      ],
+      "market_ids": [
+        "xyz:NVDA"
+      ],
+      "memberships": [
+        {
+          "record_id": "nvidia.ai-accelerators",
+          "category_id": "ai-accelerators",
+          "exposure": "NVIDIA architectures power accelerated computing; compute efficiency need not imply a known price direction.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-nvidia-microsoft"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2025-11-18",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    },
+    {
+      "entity_id": "microsoft",
+      "name": "Microsoft",
+      "aliases": [
+        "Microsoft",
+        "Azure",
+        "Microsoft Azure"
+      ],
+      "market_ids": [
+        "xyz:MSFT"
+      ],
+      "memberships": [
+        {
+          "record_id": "microsoft.ai-cloud",
+          "category_id": "ai-cloud",
+          "exposure": "Azure provides compute and model access; effect on the diversified parent needs evidence of materiality.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-nvidia-microsoft"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2025-11-18",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    },
+    {
+      "entity_id": "broadcom",
+      "name": "Broadcom",
+      "aliases": [
+        "Broadcom"
+      ],
+      "market_ids": [
+        "xyz:AVGO"
+      ],
+      "memberships": [
+        {
+          "record_id": "broadcom.ai-accelerators",
+          "category_id": "ai-accelerators",
+          "exposure": "Named participant in next-generation TPU capacity agreement; no fabricated revenue share.",
+          "scale": null,
+          "source_ids": [
+            "anthropic-google"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-04-06",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "record_id": "anthropic.customer.amazon",
+      "from_entity": "anthropic",
+      "to_entity": "amazon",
+      "kind": "customer",
+      "explanation": "Anthropic contracts AWS training and inference compute; magnitude of impact on Amazon must be established separately.",
+      "source_ids": [
+        "anthropic-aws"
+      ],
+      "verified_on": "2026-11-01",
+      "valid_from": "2026-04-20",
+      "valid_through": "2026-11-01",
+      "status": "reviewed"
+    },
+    {
+      "record_id": "anthropic.customer.microsoft",
+      "from_entity": "anthropic",
+      "to_entity": "microsoft",
+      "kind": "customer",
+      "explanation": "Anthropic commits to Azure compute capacity; commitments are not equivalent to realized cloud revenue.",
+      "source_ids": [
+        "anthropic-nvidia-microsoft"
+      ],
+      "verified_on": "2026-11-01",
+      "valid_from": "2025-11-18",
+      "valid_through": "2026-11-01",
+      "status": "reviewed"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "anthropic-aws",
+      "url": "https://www.anthropic.com/news/anthropic-amazon-compute",
+      "summary": "Anthropic describes AWS training and inference infrastructure and an expanded compute agreement.",
+      "verified_on": "2026-11-01"
+    },
+    {
+      "source_id": "anthropic-google",
+      "url": "https://www.anthropic.com/news/google-broadcom-partnership-compute",
+      "summary": "Anthropic describes Google and Broadcom TPU capacity agreements, diversified hardware and cloud distribution. New capacity is expected from 2027.",
+      "verified_on": "2026-11-01"
+    },
+    {
+      "source_id": "anthropic-nvidia-microsoft",
+      "url": "https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships",
+      "summary": "Anthropic describes Azure compute commitments and NVIDIA architecture collaboration. This is an agreement announcement, not proof of delivered capacity or realized earnings.",
+      "verified_on": "2026-11-01"
+    }
+  ]
+}

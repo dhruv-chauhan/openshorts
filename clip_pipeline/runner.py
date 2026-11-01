@@ -92,6 +92,12 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
     inputs = {"config": ("resolved-config.json", config),
               "policy": ("policy.json", policy),
               "submission": ("submission.json", source)}
+    if plan is not None and 'enrichment' in plan.selection_binding:
+        from .enrichment import load_knowledge
+        knowledge = load_knowledge(config.enrichment)
+        if knowledge is None or digest(knowledge) != plan.selection_binding['enrichment']:
+            raise ArtifactError("render requires the plan's exact enrichment snapshot")
+        inputs['enrichment'] = ('enrichment.json', knowledge)
     if snapshot is not None:
         inputs["markets"] = ("market-snapshot.json", snapshot)
     if fixture is not None:

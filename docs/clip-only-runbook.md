@@ -307,3 +307,62 @@ Use a new `/data/smoke-*` directory for each invocation so the initial cache-mis
 The first real YouTube sample also passed acquisition, full-source transcription, manual rendering and offline source/transcript reuse. Frame inspection confirmed speaker tracking, with inherited captions overlapping the broadcaster's lower third. That remains a visual-review/tuning item; technical success does not imply publishable output. The integration test and initial sample used `tiny` Whisper for speed; the configured baseline default remains `small`. No ASR accuracy or Azure throughput claim follows from these tests. Sample artifacts and diagnostics remain under ignored local output.
 
 Phase C.1 extends the same real image test with `tests/story_media_smoke.py`: two separate story files at 1.0×/1.1×, an operator checkpoint, SIGTERM during a real media worker, resume without changing the earlier file, caption/stream timing checks, and a changed-rate plan that starts with pending output. The result is saved under `stories/story-smoke-report.json` within the smoke directory.
+
+## Phase D.1: reviewed market enrichment
+
+Copy `configs/clip-only.enriched.example.json` and configure Foundry/identity as for
+Phase D. Its `enrichment.mode: "snapshot"` selects the six-entity pilot knowledge file.
+Use `enrichment: {"mode": "off"}` (also the default) for a direct/macro baseline.
+`configs/enrichment.example.json` illustrates the knowledge contract using fictional
+entities; see `configs/development/README.md` for pilot coverage, citations and curation.
+
+The existing `select` and `resume --selection-only` commands operate unchanged. A new
+selection pins knowledge before inference, and resume reads only that snapshot. Changing
+profiles, categories, relationships or their dates requires a new selection run. Source
+media and the timestamped transcript can be reused. The baseline now supplies explicit
+spoken-ID hints to the window model; it does not relax the direct-name validator.
+
+Selection classifies a complete discussion, generates candidates from sourced category
+memberships and at most one relationship edge, then assesses every candidate. Association
+metadata has its own schema version and distinguishes direct matches from editorial
+inferences. `matched_market_ids` still means named direct subjects. Multiple associations
+can carry different/unknown exposure directions; these are never speaker-attributed
+bullish/bearish forecasts. Unsupported/uncertain optional links remain report diagnostics.
+Only supported links are eligible for app display, subject to Phase E's future approval.
+
+Configuration limits:
+
+- `max_candidates_per_story` (default 30): exceeding it produces review, not a partial
+  successful assessment. Context overflow likewise withholds rendering.
+- `membership_max_age_days` (365) and `relationship_max_age_days` (90): freshness is
+  measured at the pinned run creation date. Applicability dates are checked independently.
+- All profile links are filtered by the enabled market universe. Missing profiles do
+  not disable a direct/macro path. No graph traversal beyond one edge is performed.
+
+Unknown or unsupported full calendar event dates remain unknown. The selector accepts
+explicit ISO or full English month/day/year dates; it does not invent the day from a
+quarter, year, or video publication date. Time-sensitive inferred links with unknown
+applicability require review. An independently relevant direct/macro story can survive
+optional link uncertainty, but material source-number/date/context uncertainty still
+withholds the sequence. This conservative date rule is a pilot limitation, not a claim
+that all legitimate financial discussions state a complete date.
+
+The local HTML preview includes source evidence IDs, association decisions, knowledge
+record IDs, citations, coverage gaps and reasons. It clearly labels inferences as editorial
+metadata. Generated source titles/captions must not include inferred claims. If rendering
+an enriched plan, provide its exact knowledge snapshot in the render configuration; the
+renderer pins it and preserves metadata in each story artifact and sequence manifest.
+It performs no new media processing for enrichment and still makes no approval claim.
+
+To evaluate synthetic classification/association cases against a real Foundry deployment
+(opt-in paid inference; no real media):
+
+```bash
+python tests/enrichment_live_smoke.py --config '<configured-json>' --output '<local-report.json>'
+```
+
+For the reference comparison, use the same source/transcript and corrected 120-market
+catalog in both modes. Retain both run IDs, prompt/policy/model settings, knowledge hashes,
+coverage/review reasons and token usage. The older 118-market result cannot measure the
+benefit of enrichment because it omitted ANT. Association precision and recall require
+manual labels; a single video's output count is not evidence of general accuracy.

@@ -32,3 +32,40 @@ them to `pre_ipo`. Use the explicit status, not an anticipated listing date, to
 determine pre-IPO inclusion. Review normalized names/classes/aliases, update the snapshot version and
 provenance, and update the coverage test. Do not silently refresh an in-flight run.
 Switch to `markets.mode: "api"` with the real backend URL/auth reference when ready.
+
+## Reviewed AI profiles (Phase D.1)
+
+`ai-market-profiles.json` is a deliberately small, independently versioned knowledge
+snapshot. It covers six entities (Anthropic, Amazon, Alphabet, NVIDIA, Microsoft and
+Broadcom), overlapping model/cloud/accelerator roles, and two direct customer links.
+The manufacturing category has no curated profiles yet. Uncovered markets stay eligible
+for direct-name or macro matching; missing profiles are reported rather than invented.
+This snapshot does not authorize any instrument. Final IDs always intersect the market
+API response, including its enabled flags.
+
+The factual summaries and relationship scopes were checked against these issuer pages
+on 2026-11-01:
+
+- [Anthropic's AWS compute agreement](https://www.anthropic.com/news/anthropic-amazon-compute)
+- [Google/Broadcom compute agreement](https://www.anthropic.com/news/google-broadcom-partnership-compute)
+- [Microsoft/NVIDIA partnership announcement](https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships)
+
+These records describe announced agreements and business roles, not verified delivery,
+realized revenue, investment returns or guaranteed present exposure. No prices, financial
+weights or scale estimates are inferred. Each record states its applicability interval,
+verification date and sources. Future delivery plans must not be presented as realized
+capacity. Inference requires a source-grounded mechanism and qualitative materiality
+assessment; a shared category or relationship alone cannot establish eligibility.
+
+Refresh procedure: review the cited source and newer issuer disclosures; reconcile
+changed identities, aliases, relationships and applicability dates; mark conflicting
+claims `conflicted`; update the verification date only after checking the factual claim;
+bump the snapshot revision. Keep a bounded applicability end date. Stale/conflicted or
+out-of-period records cannot support inferred associations. Do not refresh an in-flight
+run or infer a missing event date from the publication date. Initial freshness settings
+are 365 days for memberships and 90 days for relationships; applicability is checked
+separately. Scale is nullable, and the initial profiles deliberately leave it unknown.
+
+`configs/enrichment.example.json` is a separate **synthetic** contract example for
+fixtures. It is not a real issuer disclosure or production knowledge. The opt-in live
+synthetic evaluator uses it without downloading or publishing any media.

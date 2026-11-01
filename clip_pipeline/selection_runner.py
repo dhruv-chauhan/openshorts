@@ -15,9 +15,8 @@ from .selection import select_stories
 from .transcript import validate_transcript
 
 
-def prompt_snapshot():
-    return {'version': prompts.PROMPT_VERSION, 'relevance': prompts.RELEVANCE,
-            'proposal': prompts.PROPOSE, 'check': prompts.CHECK, 'rank': prompts.RANK}
+def prompt_snapshot(enriched=False):
+    return prompts.snapshot(enriched)
 
 
 def prepare_selection(config_path, source_path, transcript_path):
@@ -29,7 +28,10 @@ def prepare_selection(config_path, source_path, transcript_path):
         raise ArtifactError('selection requires a real source artifact')
     validate_transcript(transcript, source, config.media)
     inputs = {'config': config, 'policy': policy, 'source': source, 'submission': source.origin,
-              'transcript': transcript, 'prompts': prompt_snapshot()}
+              'transcript': transcript, 'prompts': prompt_snapshot(config.enrichment.mode == 'snapshot')}
+    if config.enrichment.mode == 'snapshot':
+        from .enrichment import load_knowledge
+        inputs['enrichment'] = load_knowledge(config.enrichment)
     # Pin explicit development data before media or inference work.
     if config.markets.mode == 'mock_api':
         markets = read_json_model(Path(config.markets.path), MarketSnapshot)
@@ -69,7 +71,7 @@ def execute_selection(workspace, run_id, *, backend_factory=FoundryBackend):
         source = read_json_model(path('source'), SourceArtifact)
         transcript = read_json_model(path('transcript'), TranscriptArtifact)
         policy = read_json_model(path('policy'), TopicPolicy)
-        if json.loads(path('prompts').read_text()) != prompt_snapshot():
+        if json.loads(path('prompts').read_text()) != prompt_snapshot(config.enrichment.mode == 'snapshot'):
             raise ArtifactError('selection implementation changed; prepare a new run')
         save(state='running', stage='transcribed', reason_code='selection_started')
         try:
@@ -104,7 +106,10 @@ def execute_selection(workspace, run_id, *, backend_factory=FoundryBackend):
                                                 response_model=model, validate=validate)
                     artifact(key, response)
                     return response
-                plan, report = select_stories(config, source, transcript, policy, markets, call)
+                from .enrichment_contracts import KnowledgeSnapshot
+                knowledge = read_json_model(path('enrichment'), KnowledgeSnapshot) if config.enrichment.mode == 'snapshot' else None
+                plan, report = select_stories(config, source, transcript, policy, markets, call,
+                    knowledge=knowledge, assessed_on=manifest.created_at.date().isoformat())
             artifact('selection_report', report)
             artifact('story_plan', plan)
             from .report import selection_preview

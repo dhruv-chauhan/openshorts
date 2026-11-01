@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator, model_serializer
 
 from .contracts import Contract, Text, TopicPolicy, MarketSnapshot, clean_https_url
 
@@ -175,18 +175,38 @@ class LimitsConfig(Contract):
     max_jobs: Annotated[int, Field(ge=1, le=1)] = 1
 
 
+class EnrichmentOff(Contract):
+    mode: Literal["off"] = "off"
+
+
+class EnrichmentSnapshot(Contract):
+    mode: Literal["snapshot"]
+    path: Text
+    max_candidates_per_story: Annotated[int, Field(ge=1, le=200)] = 30
+    membership_max_age_days: Annotated[int, Field(ge=1, le=3650)] = 365
+    relationship_max_age_days: Annotated[int, Field(ge=1, le=3650)] = 90
+
+
 class PipelineConfig(Contract):
     schema_version: Literal["1"] = "1"
     workspace: Text
     policy_path: Text
     foundry: FoundryConfig
     markets: Annotated[ApiMarkets | SnapshotMarkets | MockApiMarkets, Field(discriminator="mode")]
+    enrichment: Annotated[EnrichmentOff | EnrichmentSnapshot, Field(discriminator="mode")] = Field(default_factory=EnrichmentOff)
     blob: BlobConfig | None = None
     selection: SelectionConfig = Field(default_factory=SelectionConfig)
     stories: StoriesConfig = Field(default_factory=StoriesConfig)
     media: MediaConfig = Field(default_factory=MediaConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
+
+    @model_serializer(mode="wrap")
+    def preserve_off_hashes(self, handler):
+        data = handler(self)
+        if self.enrichment.mode == "off":
+            data.pop("enrichment", None)
+        return data
 
     @model_validator(mode="after")
     def model_budget(self):
@@ -210,12 +230,17 @@ def load_config(path: Path) -> PipelineConfig:
         data[key] = str(resolve_path(data[key], path.parent))
     if config.markets.mode in {"snapshot", "mock_api"}:
         data["markets"]["path"] = str(resolve_path(config.markets.path, path.parent))
+    if config.enrichment.mode == "snapshot":
+        data["enrichment"]["path"] = str(resolve_path(config.enrichment.path, path.parent))
     return PipelineConfig.model_validate(data)
 
 
 def load_inputs(config: PipelineConfig) -> tuple[TopicPolicy, MarketSnapshot | None]:
     from .artifacts import read_json_model
 
+    if config.enrichment.mode == "snapshot":
+        from .enrichment import load_knowledge
+        load_knowledge(config.enrichment)
     policy = read_json_model(Path(config.policy_path), TopicPolicy)
     snapshot = (read_json_model(Path(config.markets.path), MarketSnapshot)
                 if config.markets.mode in {"snapshot", "mock_api"} else None)

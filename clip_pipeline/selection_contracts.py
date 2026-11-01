@@ -32,7 +32,7 @@ class RelevanceResponse(Contract):
 
 
 class SelectedStory(StorySpec):
-    topic_path: TopicPath
+    topic_path: Literal['allowed_market', 'equity_macro', 'market_exposure']
     market_connection: Text
     freshness: Literal['time_sensitive', 'evergreen', 'uncertain']
     event_date: Text | None
@@ -121,3 +121,23 @@ class RankedSequence(Contract):
 
 class RankingResponse(Contract):
     ordered: list[RankedSequence]
+
+
+class EnrichedWindowDecision(WindowDecision):
+    topic_path: Literal['allowed_market', 'equity_macro', 'market_exposure'] | None
+
+
+class EnrichedRelevanceResponse(Contract):
+    windows: list[EnrichedWindowDecision]
+
+
+class EnrichedStoryDraft(StoryDraft):
+    topic_path: Literal['allowed_market', 'equity_macro', 'market_exposure']
+
+
+class EnrichedSequenceDraft(SequenceDraft):
+    stories: list[EnrichedStoryDraft] = Field(min_length=1, max_length=100)
+
+
+class EnrichedDraftResponse(DraftResponse):
+    sequences: list[EnrichedSequenceDraft] = Field(max_length=100)

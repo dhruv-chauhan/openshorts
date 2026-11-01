@@ -47,6 +47,13 @@ def validate_plan_transcript(plan, source, transcript, config):
             raise MediaError("story_has_no_words")
         if any(w.start < story.span.start or w.end > story.span.end for w in words):
             raise MediaError("story_boundary_inside_word")
+        if story.enrichment:
+            inside = {s.segment_id for s in transcript.segments if s.words[0].start >= story.span.start
+                      and s.words[-1].end <= story.span.end}
+            metadata = story.enrichment
+            items = [*metadata.classification.subjects, *metadata.classification.categories, *metadata.associations]
+            if any(not set(item.evidence_segment_ids).issubset(inside) for item in items):
+                raise MediaError("enrichment_evidence_outside_story")
         for evidence in story.evidence + story.context:
             segment = segments.get(evidence.segment_id)
             if (segment is None or evidence.start < segment.start or evidence.end > segment.end):
@@ -106,6 +113,11 @@ def validate_story_checkpoint(manifest, directory, config):
         raise ArtifactError("story plan is not a pinned input")
     plan = read_json_model(directory / manifest.artifacts["story_plan"].path, StoryPlan)
     validate_plan_config(plan, config)
+    if 'enrichment' in plan.selection_binding:
+        from .enrichment_contracts import KnowledgeSnapshot
+        ref = manifest.artifacts.get('enrichment')
+        if ref is None or digest(read_json_model(directory / ref.path, KnowledgeSnapshot)) != plan.selection_binding['enrichment']:
+            raise ArtifactError("story knowledge snapshot mismatch")
     if plan.source != manifest.source or set(manifest.story_progress) != {s.story_id for s in all_stories(plan)}:
         raise ArtifactError("story checkpoint identities do not match the plan")
     rendered = {}

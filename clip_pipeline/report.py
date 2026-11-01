@@ -3,6 +3,22 @@ from html import escape
 from urllib.parse import quote
 
 
+def enrichment_preview(metadata, knowledge=None):
+    """Diagnostic associations are labeled separately from publishable metadata."""
+    if not metadata:
+        return ''
+    if hasattr(metadata, 'model_dump'):
+        metadata = metadata.model_dump()
+    import json
+    sources = (knowledge or {}).get('sources', [])
+    citations = ''.join(f'<li><a href="{escape(s["url"], quote=True)}">{escape(s["source_id"])}</a>: '
+                        f'{escape(s["summary"])}</li>' for s in sources)
+    return ('<details><summary>Editorial associations — not speaker claims</summary>'
+            '<p>Only supported associations are eligible for display. Unsupported/review links below '
+            'are diagnostics; final-media approval is still required.</p><pre style="white-space:pre-wrap">'
+            + escape(json.dumps(metadata, indent=2)) + '</pre><ul>' + citations + '</ul></details>')
+
+
 def story_preview(plan, sequences):
     sections = []
     for sequence in sequences:
@@ -25,7 +41,7 @@ def story_preview(plan, sequences):
             cards.append(f'''<article id="{escape(story.story_id)}">
 <h3>{i + 1}. {escape(story.title)}</h3><p>{metadata}</p>
 <p>Source {story.span.start:.2f}–{story.span.end:.2f}s · {story.playback_rate:g}× · {artifact.final.duration_seconds:.2f}s output · {escape(story.role)}</p>
-{gap}<video controls preload="metadata" src="{escape(quote(artifact.final.media.path, safe='/'))}"></video>
+{enrichment_preview(story.enrichment)}{gap}<video controls preload="metadata" src="{escape(quote(artifact.final.media.path, safe='/'))}"></video>
 <p>SHA-256: <code>{artifact.final.media.sha256}</code></p><nav>{' · '.join(navigation)}</nav></article>''')
         sections.append(f'<section><h2>{escape(sequence.sequence.title)}</h2><nav>{links}</nav>{"".join(cards)}</section>')
     body = ''.join(sections) or '<p>The manual plan contains no sequences. No relevance decision was made.</p>'
@@ -50,7 +66,8 @@ def selection_preview(plan, report, transcript):
                          if w.start >= span['start'] and w.end <= span['end']]
                 cards.append(f"<article><h3>{escape(story['title'])}</h3><p>{span['start']:.2f}–{span['end']:.2f}s · "
                              f"{escape(story['stance'])} · {escape(story['topic_path'])}</p><p>{escape(' '.join(words))}</p>"
-                             f"<p>Market connection: {escape(story['market_connection'])}</p></article>")
+                             f"<p>Market connection: {escape(story['market_connection'])}</p>"
+                             + enrichment_preview(story.get('enrichment'), report.get('knowledge')) + '</article>')
             gaps = ''.join(f"<li>{o['start']:.2f}–{o['end']:.2f}s: {escape(o['reason'])}</li>" for o in sequence['omissions'])
             state = 'Selected for unaudited rendering' if sequence['sequence_id'] in accepted else 'Withheld — inspect selection report'
             sections.append(f"<section><h2>{escape(sequence['title'])}</h2><p>{state}</p>{''.join(cards)}<ul>{gaps}</ul></section>")
@@ -59,5 +76,5 @@ def selection_preview(plan, report, transcript):
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <style>body{{font:17px system-ui;max-width:900px;margin:30px auto;padding:20px;line-height:1.6}}section{{border-top:1px solid #999}}article{{padding:10px 20px;background:#f2f4f6}}</style></head><body>
 <h1>Pre-render story selection</h1><p>UNAUDITED · NOT APPROVED. Outcome: {escape(report['outcome'])}.
-All {len(report['windows'])} transcript windows evaluated. This preview is not a final-audio or visual audit.</p>
+{len(report['windows'])} transcript windows tracked. Coverage complete: {report['coverage_complete']}. This preview is not a final-audio or visual audit.</p>
 <ul>{reasons}</ul>{''.join(sections) or '<p>No story proposals.</p>'}</body></html>'''

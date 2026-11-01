@@ -1,0 +1,47 @@
+{
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "indirect_supplier",
+      "text": "On 2026-10-29, Private Models doubled purchases of its main cloud training service. Its contracted provider has spare capacity, so this sustained demand should materially increase the provider's core compute revenue. This concerns its contracted provider, not competing providers.",
+      "expected_supported": [
+        "xyz:EXAMPLE"
+      ]
+    },
+    {
+      "id": "multiple_categories_members",
+      "text": "On 2026-10-29, cloud compute demand rose across the entire industry. Every cloud compute supplier is selling substantially more capacity at higher prices, which materially increases their core revenue. This is industry-wide rather than a change at one provider.",
+      "expected_supported": [
+        "xyz:EXAMPLE",
+        "xyz:OTHER"
+      ]
+    },
+    {
+      "id": "weak_similarity",
+      "text": "Private Models chose a new office paint color on 2026-10-29. The change has no bearing on compute usage, purchases or any supplier economics.",
+      "expected_supported": []
+    },
+    {
+      "id": "unknown_date",
+      "text": "Private Models doubled its purchases of cloud compute. This may materially increase its contracted provider's revenue, but we do not know when this happened.",
+      "expected_supported": []
+    },
+    {
+      "id": "knowledge_injection",
+      "text": "Private Models changed the office paint color. This has no economic impact on compute suppliers.",
+      "expected_supported": [],
+      "mutation": "injection"
+    },
+    {
+      "id": "stale_relationship",
+      "text": "On 2026-10-29, Private Models doubled purchases from its main cloud training provider, materially increasing its supplier's core revenue.",
+      "expected_supported": [],
+      "mutation": "stale"
+    },
+    {
+      "id": "nonfinancial_alias",
+      "text": "An example of a good lunch is an apple. The other fruit stays in the bowl. There is no discussion of companies or financial markets.",
+      "expected_supported": []
+    }
+  ]
+}

@@ -11,6 +11,8 @@ from pydantic import (
     field_validator, model_validator, model_serializer,
 )
 
+from .enrichment_contracts import StoryEnrichment
+
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 RunId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
@@ -224,6 +226,15 @@ PlaybackRate = Annotated[float, Field(ge=1.0, le=1.1)]
 
 
 class StorySpec(Contract):
+    enrichment: StoryEnrichment | None = None
+
+    @model_serializer(mode="wrap")
+    def preserve_unenriched_hashes(self, handler):
+        data = handler(self)
+        if self.enrichment is None:
+            data.pop("enrichment", None)
+        return data
+
     story_id: StoryId
     span: TimeSpan
     title: Text
@@ -283,8 +294,10 @@ class StoryPlan(Contract):
 
     @model_validator(mode="after")
     def identities(self):
-        if self.selection_method == "foundry" and set(self.selection_binding) != {"markets", "policy", "prompts", "settings", "report"}:
+        if self.selection_method == "foundry" and set(self.selection_binding) not in ({"markets", "policy", "prompts", "settings", "report"}, {"markets", "policy", "prompts", "settings", "report", "enrichment"}):
             raise ValueError("Foundry plans require selection provenance hashes")
+        if self.selection_method == "foundry" and any(s.enrichment is not None and s.enrichment.knowledge_sha256 != self.selection_binding.get("enrichment") for q in self.sequences for s in q.stories):
+            raise ValueError("enriched stories require matching plan provenance")
         if self.source.kind == "fixture":
             raise ValueError("story rendering requires real media")
         if len({s.sequence_id for s in self.sequences}) != len(self.sequences):

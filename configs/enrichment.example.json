@@ -1,0 +1,101 @@
+{
+  "version": "synthetic-v1",
+  "categories": [
+    {
+      "category_id": "cloud",
+      "dimension": "business_role",
+      "definition": "Supplies compute infrastructure",
+      "includes": [
+        "Compute usage and prices"
+      ],
+      "excludes": [
+        "General technology talk"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "disclosure",
+      "url": "https://example.invalid/disclosure",
+      "summary": "Synthetic: Example supplies compute; Other supplies competing compute.",
+      "verified_on": "2026-11-01"
+    }
+  ],
+  "entities": [
+    {
+      "entity_id": "private",
+      "name": "Private Models",
+      "aliases": [
+        "Private Models"
+      ],
+      "market_ids": [],
+      "memberships": []
+    },
+    {
+      "entity_id": "supplier",
+      "name": "Example Corporation",
+      "aliases": [
+        "Example"
+      ],
+      "market_ids": [
+        "xyz:EXAMPLE"
+      ],
+      "memberships": [
+        {
+          "record_id": "supplier.cloud",
+          "category_id": "cloud",
+          "exposure": "Compute sales",
+          "scale": null,
+          "source_ids": [
+            "disclosure"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-01-01",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    },
+    {
+      "entity_id": "other",
+      "name": "Other Corporation",
+      "aliases": [
+        "Other"
+      ],
+      "market_ids": [
+        "xyz:OTHER"
+      ],
+      "memberships": [
+        {
+          "record_id": "other.cloud",
+          "category_id": "cloud",
+          "exposure": "Competing compute sales",
+          "scale": null,
+          "source_ids": [
+            "disclosure"
+          ],
+          "verified_on": "2026-11-01",
+          "valid_from": "2026-01-01",
+          "valid_through": "2026-11-01",
+          "status": "reviewed"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "record_id": "private.customer.supplier",
+      "from_entity": "private",
+      "to_entity": "supplier",
+      "kind": "customer",
+      "explanation": "Private Models buys compute from Example.",
+      "source_ids": [
+        "disclosure"
+      ],
+      "verified_on": "2026-11-01",
+      "valid_from": "2026-01-01",
+      "valid_through": "2026-11-01",
+      "status": "reviewed"
+    }
+  ]
+}
