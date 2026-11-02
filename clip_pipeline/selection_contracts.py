@@ -77,7 +77,7 @@ class StoryDraft(Contract):
     role: Literal['context', 'claim', 'explanation', 'evidence', 'qualification', 'conclusion']
     attribution: AttributedStance | None = Field(description="Null if the speaker or price direction is unknown. Descriptive facts without a price view do not imply neutral stance.")
     topic_path: TopicPath
-    matched_market_ids: list[Text]
+    matched_market_ids: list[Text] = Field(description="Subset of the union of spoken_market_ids in this story's selected segment range. A name in another story is not a direct match. Use [] for provisional exposure if none is spoken here.")
     market_connection: Text
     freshness: Literal['time_sensitive', 'evergreen', 'uncertain']
     event_date: Text | None

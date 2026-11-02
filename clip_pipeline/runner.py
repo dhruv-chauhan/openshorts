@@ -154,6 +154,9 @@ def inspect_run(workspace: Path, run_id: str) -> RunManifest:
     if manifest.execution_kind == "topic_selection":
         from .selection import validate_selection_checkpoint
         validate_selection_checkpoint(manifest, store.run_dir(run_id), config)
+    if manifest.execution_kind == "story_audit":
+        from .audit_runner import validate_audit_checkpoint
+        validate_audit_checkpoint(manifest, store.run_dir(run_id), config)
     return manifest
 
 

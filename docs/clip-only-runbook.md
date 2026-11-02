@@ -1,6 +1,6 @@
-# Clip-only pipeline: Phases A–D
+# Clip-only pipeline: Phases A–E
 
-Phase A provides contracts, preparation, checksums, and a single-worker lock. Phase B adds the Foundry text adapter, capability preflight, and enforced media profile. Phase C adds bounded source ingestion, reusable word transcripts, and captioned vertical rendering of an explicitly supplied span. Phase C.1 adds separate story files, ordered sequence manifests, optional 1.1× playback, and per-story resume. Phase D adds market-policy selection from reused source/transcript artifacts. Final content auditing, approval, and Blob upload remain in later phases of the [implementation plan](architecture/clip-only-azure-implementation-plan.md). A successful manual render is an **unaudited checkpoint**, never approved content.
+Phase A provides contracts, preparation, checksums, and a single-worker lock. Phase B adds the Foundry text adapter, capability preflight, and enforced media profile. Phase C adds bounded source ingestion, reusable word transcripts, and captioned vertical rendering of an explicitly supplied span. Phase C.1 adds separate story files, ordered sequence manifests, optional 1.1× playback, and per-story resume. Phase D adds market-policy selection from reused source/transcript artifacts. Phase D.1 adds reviewed market classification and exposure matching. Phase E adds final-audio auditing, explicit human review, and private Blob publication; Azure deployment follows in Phase F of the [implementation plan](architecture/clip-only-azure-implementation-plan.md). A successful manual render is an **unaudited checkpoint**, never approved content.
 
 ## Setup
 
@@ -328,7 +328,7 @@ metadata has its own schema version and distinguishes direct matches from editor
 inferences. `matched_market_ids` still means named direct subjects. Multiple associations
 can carry different/unknown exposure directions; these are never speaker-attributed
 bullish/bearish forecasts. Unsupported/uncertain optional links remain report diagnostics.
-Only supported links are eligible for app display, subject to Phase E's future approval.
+Only supported links are eligible for app display, subject to Phase E's final-media audit and human approval.
 
 Configuration limits:
 
@@ -366,3 +366,111 @@ catalog in both modes. Retain both run IDs, prompt/policy/model settings, knowle
 coverage/review reasons and token usage. The older 118-market result cannot measure the
 benefit of enrichment because it omitted ANT. Association precision and recall require
 manual labels; a single video's output count is not evidence of general accuracy.
+
+
+## Phase E: final-media audit, review and private storage
+
+Install `requirements-clip-storage.txt` for the controller, or the dedicated media
+requirements/image for local ASR. This adds the pinned Azure Blob SDK without Google,
+ElevenLabs or the legacy cloud application. Keep real configs, transcripts and reviewer
+identities in ignored local output. The baseline still requires a human reviewer.
+
+Audit a completed `render-stories` checkpoint using the policy and markets in your
+configured JSON. The audit imports verified render artifacts into its own run; it does
+not mutate the render or reuse a source transcript as final-audio evidence.
+
+```bash
+python -m clip_pipeline audit --config '<configured-json>' \
+  --render-workspace '<render-workspace>' --render-run-id '<render-run-id>'
+```
+
+Optional configuration:
+
+```json
+"audit": {
+  "final_audio_asr": true,
+  "require_manual_review": true,
+  "whisper_model": "small",
+  "context_padding_seconds": 45.0
+}
+```
+
+`audit --prepare-only` pins inputs without media/model execution. `audit --media-only`
+performs media checks and final-audio ASR, then stops before Foundry. Resume that run
+with `resume --workspace … --run-id … --audit-only`; adding `--media-only` reuses
+completed inspections without model calls. Completed model calls and the token budget
+are durable across retries. Operational errors remain retryable, never “no matches.”
+Changed audit prompts or input settings require a new audit, with compatible ASR cache
+reuse. A copied audit run has its own artifact root; the original render is not resumed.
+
+A completed semantic audit exits **3** and returns the local preview, audit bundle and
+pending review template. The preview plays each story separately in order and includes
+source context, final transcript, timed captions, policy results, evidence paths and
+media hashes. It flags omitted source intervals. Inspect the entire video/audio for
+framing, charts, banners, captions, synchronization and complete boundaries. The text
+model does not inspect images; visual acceptance belongs to the human reviewer.
+
+Copy the template and fill in the actual human reviewer, UTC review timestamp, each
+item's decision and `watched_entire_item`. For every review issue on an approved item,
+provide its `issue_id` and a concrete evidence-backed resolution (at least 20 characters).
+Leave pending items pending; never invent a review. Every planned story must be approved
+before its sequence can be approved. A reject-level audit issue cannot be bypassed.
+If the resolution changes media, metadata, ordering or membership, create the revised
+plan/render and audit it again. A note claiming a correction does not change the output.
+
+```bash
+python -m clip_pipeline review --workspace '<audit-workspace>' \
+  --run-id '<audit-run-id>' --decisions '<completed-review.json>'
+```
+
+To publish, configure the destination **before preparing the audit**:
+
+```json
+"blob": {
+  "account_url": "https://YOURACCOUNT.blob.core.windows.net",
+  "runs_container": "clip-runs",
+  "approved_container": "clip-approved"
+}
+```
+
+Blob uses the Azure CLI identity when Foundry `auth_mode` is `developer_identity`;
+otherwise it uses managed identity, including the configured client ID if present.
+Foundry API keys never authenticate to Blob. Provision the scoped Blob data permissions
+and verify them on the Azure worker in Phase F. Containers are created private when
+absent; existing public containers are refused. No SAS URL is embedded in manifests.
+
+```bash
+python -m clip_pipeline promote --workspace '<audit-workspace>' --run-id '<audit-run-id>'
+```
+
+Promotion refreshes API markets with zero stale-cache allowance before uploading and
+again before the commit. Changed eligibility/identity of a used market, changed
+knowledge, or an expired supported inference requires new audit/review. Explicit mock
+or snapshot mode remains usable for development and is marked in the commit; it must
+not be confused with the authoritative backend API.
+
+Objects use deterministic keys under
+`approved/<source-sha>/<audit-run-id>/<review-sha>/`. Each sequence manifest contains
+ordered stories, private media/caption keys and hashes, timing, display metadata,
+source permission status, policy/knowledge/model provenance and audit results. Separate
+run-container evidence includes final-audio inspections. All remote bytes are checked
+before writing `commit.json` last. Consumers must discover **only commit manifests**,
+never raw clip prefixes. The consuming backend resolves private delivery URLs.
+
+Repeat `promote` after interruption; immutable existing objects must match both size
+and SHA-256. A failed upload has no discovery commit. Once publication has started,
+review changes require a new audit run because the remote commit may already exist
+when a local acknowledgement fails. Local workspace files must remain available for
+retry; remote reconstruction after VM loss is a Phase F deployment task.
+
+The initial E validation used the existing C.1 reference clips, independent `small`
+Whisper ASR and live Foundry audits. It did not approve withheld D.1 proposals. The
+reference is still unapproved: captions and metadata need further attention, and the
+auditor can overflag unknown speaker/stance or quarter context. This is an audit/review
+baseline, not a claim of editorial precision across channels. SDK storage validation
+used local Azurite; Azure RBAC has not yet been tested for storage.
+
+The offline media CI smoke now also runs `tests/audit_media_smoke.py` on generated
+speech: final-media checks, fresh final-audio ASR, checkpoint reuse, no Foundry calls,
+and no Google SDK. Its `tiny` model override is only for the synthetic test; the
+reference validation and default audit configuration use `small`.

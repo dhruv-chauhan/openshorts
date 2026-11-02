@@ -275,3 +275,15 @@ def test_draft_resolution_uses_observed_word_times_and_source_quotes(media_case)
     assert story.span.start==0.2 and story.evidence[0].start==0.2
     assert story.evidence[0].quote==transcript.segments[0].text
     assert story.stance=='unclear' and story.speaker is None
+
+
+def test_draft_expands_fragment_to_local_sentence_completion(media_case):
+    from clip_pipeline.selection import resolve_drafts
+    config,source,transcript=scenario(media_case,['The company expects','growth to slow,','but demand may remain strong.'])
+    policy,_=load_inputs(config);call,_=model_call(transcript,policy)
+    data=call('selection','',{},DraftResponse,lambda _:None).model_dump()
+    story=data['sequences'][0]['stories'][0]
+    story.update(first_segment_id='s1',last_segment_id='s1',evidence_segment_ids=['s1'],context_segment_ids=[])
+    resolved=resolve_drafts(DraftResponse.model_validate(data),transcript.segments).sequences[0].stories[0]
+    assert resolved.span.start==transcript.segments[0].words[0].start
+    assert resolved.span.end==transcript.segments[-1].words[-1].end

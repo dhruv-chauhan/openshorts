@@ -464,7 +464,7 @@ class RunManifest(Contract):
     run_id: RunId
     created_at: AwareDatetime
     updated_at: AwareDatetime
-    execution_kind: Literal["preparation", "fixture", "manual_render", "manual_stories", "topic_selection"]
+    execution_kind: Literal["preparation", "fixture", "manual_render", "manual_stories", "topic_selection", "story_audit"]
     source: SourceInput
     stage: Stage = "configured"
     state: Literal["prepared", "running", "interrupted", "retryable", "checkpointed", "finished"] = "prepared"
@@ -481,11 +481,11 @@ class RunManifest(Contract):
                 len(set(self.input_artifact_keys)) != len(self.input_artifact_keys) or
                 not set(self.input_artifact_keys).issubset(self.artifacts)):
             raise ValueError("input artifact keys must be unique and present")
-        if self.state == "checkpointed" and not ((self.execution_kind in {"manual_render", "manual_stories"} and self.stage == "rendered") or (self.execution_kind == "topic_selection" and self.stage == "selected")):
+        if self.state == "checkpointed" and not ((self.execution_kind in {"manual_render", "manual_stories"} and self.stage == "rendered") or (self.execution_kind == "topic_selection" and self.stage == "selected") or (self.execution_kind == "story_audit" and self.stage in {"audited", "reviewed"})):
             raise ValueError("only manual rendered output can stop at an unaudited checkpoint")
         if self.story_progress and self.execution_kind != "manual_stories":
             raise ValueError("story progress/retryable checkpoints require a story run")
-        if self.state in {"interrupted", "retryable"} and self.execution_kind not in {"manual_stories", "topic_selection"}:
+        if self.state in {"interrupted", "retryable"} and self.execution_kind not in {"manual_stories", "topic_selection", "story_audit"}:
             raise ValueError("retryable checkpoints require a story or selection run")
         if any(p.artifact_key not in self.artifacts for p in self.story_progress.values() if p.artifact_key):
             raise ValueError("story progress references a missing artifact")

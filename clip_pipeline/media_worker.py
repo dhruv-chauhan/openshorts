@@ -14,7 +14,7 @@ from .profile import activate_media_profile
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["ingest", "transcribe", "render", "render-story"])
+    parser.add_argument("action", choices=["ingest", "transcribe", "render", "render-story", "audit-story"])
     parser.add_argument("--story-id")
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
@@ -27,7 +27,14 @@ def main(argv=None):
     directory.mkdir(parents=True, exist_ok=True)
     try:
         with redirect_stdout(sys.stderr):
-            if args.action == "ingest":
+            if args.action == "audit-story":
+                from .contracts import StoryArtifact
+                from .audit_media import inspect_media
+                artifact = read_json_model(args.request, StoryArtifact)
+                inspection = inspect_media(args.media, artifact, config, args.source)
+                atomic_write(directory / "inspection.json", json_bytes(inspection))
+                files = {"inspection": directory / "inspection.json"}
+            elif args.action == "ingest":
                 from .ingest import ingest
                 source, path, reused = ingest(read_json_model(args.submission, SourceInput), directory, config)
                 atomic_write(directory / "source.json", json_bytes(source))

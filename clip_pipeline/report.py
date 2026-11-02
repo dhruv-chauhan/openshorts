@@ -9,6 +9,10 @@ def enrichment_preview(metadata, knowledge=None):
         return ''
     if hasattr(metadata, 'model_dump'):
         metadata = metadata.model_dump()
+    from .audit import grouped_associations
+    from .enrichment_contracts import StoryEnrichment
+    metadata = dict(metadata)
+    metadata['associations'] = grouped_associations(StoryEnrichment.model_validate(metadata))
     import json
     sources = (knowledge or {}).get('sources', [])
     citations = ''.join(f'<li><a href="{escape(s["url"], quote=True)}">{escape(s["source_id"])}</a>: '
@@ -78,3 +82,49 @@ def selection_preview(plan, report, transcript):
 <h1>Pre-render story selection</h1><p>UNAUDITED · NOT APPROVED. Outcome: {escape(report['outcome'])}.
 {len(report['windows'])} transcript windows tracked. Coverage complete: {report['coverage_complete']}. This preview is not a final-audio or visual audit.</p>
 <ul>{reasons}</ul>{''.join(sections) or '<p>No story proposals.</p>'}</body></html>'''
+
+
+def audit_preview(plan, bundle, manifest, directory):
+    """Playable isolated stories and ordered sequence review; no approval controls."""
+    import json
+    from .audit import grouped_associations, source_context, display_metadata
+    from .artifacts import read_json_model
+    from .contracts import TranscriptArtifact
+    from .audit_contracts import MediaInspection
+    from .config import PipelineConfig
+    transcript=read_json_model(directory/manifest.artifacts['render.transcript'].path,TranscriptArtifact)
+    config=read_json_model(directory/manifest.artifacts['config'].path,PipelineConfig)
+    by_story={x.item_id:x for x in bundle.stories}
+    by_sequence={x.item_id:x for x in bundle.sequences}
+    cards=[]
+    for sequence in plan.sequences:
+        seq=by_sequence[sequence.sequence_id]
+        cards.append(f'<section><h2>{escape(sequence.title)}</h2><p>Sequence audit: {escape(seq.decision)}</p>')
+        previous=None
+        for i,story in enumerate(sequence.stories):
+            audit=by_story[story.story_id]
+            ref=manifest.artifacts['render.story.'+story.story_id+'.final_media']
+            gap=f'<p>Omitted source interval: {previous:.2f}–{story.span.start:.2f}s</p>' if previous is not None and previous<story.span.start else ''
+            previous=story.span.end
+            issues=[x.model_dump() for x in [*audit.deterministic_issues,*audit.semantic.issues]]
+            inspection=read_json_model(directory/manifest.artifacts['inspection.'+story.story_id].path,MediaInspection)
+            evidence={'displayed_metadata':display_metadata(story),
+                'source_context':source_context(transcript,story.span.start,story.span.end,config.audit.context_padding_seconds),
+                'final_audio':inspection.transcript.model_dump() if inspection.transcript else None,
+                'captions':inspection.captions_text,'rules':[r.model_dump() for r in audit.semantic.rules]}
+            navigation=' · '.join(f'<a href="#{escape(sequence.stories[j].story_id)}">{label}</a>'
+                for j,label in [(i-1,'Previous story'),(i+1,'Next story')] if 0<=j<len(sequence.stories))
+            cards.append(f'<article id="{escape(story.story_id)}"><h3>{i+1}. {escape(story.title)}</h3>'
+                f'<p>{escape(audit.decision)} · source {story.span.start:.2f}–{story.span.end:.2f}s · {story.playback_rate:g}×</p>{gap}'
+                f'<video controls preload="metadata" src="{escape(quote(ref.path,safe="/"))}"></video>'
+                f'<nav>{navigation}</nav><p>Delivered SHA-256: <code>{ref.sha256}</code></p>'
+                f'<p>{escape(audit.semantic.summary)}</p><pre>{escape(json.dumps(issues,indent=2))}</pre>'
+                f'<details><summary>Source context, final audio, captions and rule results</summary><pre>{escape(json.dumps(evidence,indent=2))}</pre></details>'
+                f'<details><summary>One assessment per market; editorial inference is not speaker stance</summary>'
+                f'<pre>{escape(json.dumps(grouped_associations(story.enrichment),indent=2))}</pre></details></article>')
+        cards.append(f'<p>{escape(seq.semantic.summary)}</p><pre>{escape(json.dumps([x.model_dump() for x in [*seq.deterministic_issues,*seq.semantic.issues]],indent=2))}</pre></section>')
+    return '''<!doctype html><html><head><meta charset="utf-8"><title>Final-media audit review</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; media-src 'self' file:; style-src 'unsafe-inline'">
+<style>body{font:16px system-ui;max-width:900px;margin:24px auto;padding:20px}video{width:min(100%,360px);max-height:75vh}pre{white-space:pre-wrap;overflow-wrap:anywhere}article{border-top:1px solid #888;padding:16px}section{margin-bottom:40px}</style>
+</head><body><h1>Final-media audit — human review required</h1>
+<p>NOT APPROVED. Play every story in full, individually and in sequence. Check framing, charts, captions, audio, sync, boundaries and context. Review JSON binds exact media, metadata and audit hashes. Hard failures require corrected output and a new audit.</p>''' + ''.join(cards) + '</body></html>'

@@ -2,7 +2,7 @@
 
 Date: 2026-11-01  
 Repository baseline reviewed: `459716b`  
-Status: Phases A–D implemented and pushed; Phase C is `ac14215`, C.1 is `1c83090`, and D is `ff9f680`. Phase D's execution path and exit criteria are validated; the reference run completes with `needs_review` and withholds its story proposals. Phase D.1 is implemented and validated locally (uncommitted): reviewed market classification and exposure matching precede Phase E. The corrected-catalog baseline and enriched reference both return `needs_review`; no content approval is claimed. Editorial refinement, final-media audits, approval and Azure worker deployment remain outstanding. See the [clip-only runbook](../clip-only-runbook.md) for commands and limitations.
+Status: Phases A–D.1 are implemented and pushed on `clip-only-azure`; D.1 is `ea418ff`. Phase E is implemented locally: independent final-audio audits, hash-bound human review, and private Blob commit manifests. Reference content remains unapproved; the audit exercises the existing C.1 story clips without overriding withheld D/D.1 selections. Final sample acceptance and Azure worker/storage identity validation remain in Phase F. See the [clip-only runbook](../clip-only-runbook.md) for commands and limitations.
 
 ## 1. Outcome and scope
 
@@ -748,6 +748,18 @@ a delivery guarantee; complete profile coverage of all 120 markets is not a D.1 
 3. Add Blob storage and approved ordered sequence manifests, final commit manifests and approval-time market refresh. A removed/changed story triggers sequence re-audit before promotion.
 
 Exit: no unreviewed/rejected/failed story or sequence enters the approved index. Changing final bytes, order, membership or displayed metadata invalidates the corresponding approval. Upload interruption/retry cannot publish an incomplete sequence. Audit failure cannot become `completed_no_matches`.
+
+Implemented locally in Phase E:
+
+- `audit_contracts.py`, `audit_media.py`, `audit.py` and `audit_runner.py` import a verified render into an immutable audit run, inspect delivered files, independently transcribe final audio, and separately audit every story and its ordered sequence. Source context includes omitted intervals; selected-source evidence excludes words outside the actual cut. Adjacent karaoke highlight events are collapsed into timed visible caption text for semantic comparison. Independent ASR defaults to `small`; a stronger model can be configured without changing source ASR.
+- `review.py` creates pending reviewer packets and validates explicit human decisions against the audit, story and sequence hashes. Every approved item requires full playback, every review issue requires evidence, and hard failures cannot be overridden. Changing metadata or resolving an issue by editing media requires another render/audit/review; review notes do not modify displayed content.
+- `storage.py` checks fresh market eligibility and pinned knowledge at promotion, uploads immutable private objects, verifies remote bytes, and writes the discovery commit last. Interrupted publication resumes deterministically; changing review after publication starts requires a new audit run. Only complete explicitly approved sequences are included. Mock/snapshot market universes remain clearly marked as development data.
+- CLI additions: `audit`, `resume --audit-only`, `review`, and `promote`. `--media-only` supports offline media inspection before paid inference. A completed audit remains a checkpoint with no approved outcome; `stored` requires explicit human approval and successful publication.
+- Refinements: exclude weak founder-history anecdotes; expand fragment boundaries to observed sentence completion; give proposals segment-level direct-name hints; retain financial figures with their subject and caveat; group multiple evidence paths under one market; distinguish attributed uncertainty from unintelligible ASR and avoid invented compute-demand implications. Optional unknown metadata remains a tuning concern, not a reason to fabricate identities or direction.
+
+Validation includes focused failure/recovery tests, actual final-audio ASR in the no-Google container, live Foundry audits on the same reference stories, and Azure Blob SDK upload/retry/hash checks against a temporary local Azurite instance. No real reference clip has been approved or uploaded. Live Azure Blob RBAC/container access and VM-loss checkpoint recovery are deployment checks for F; local recovery and commit-last behavior do not establish those properties.
+
+The live auditor remains conservative and imperfect: it can overflag unknown speaker/stance metadata or temporal context. Caption/source-transcript quality also needs another editorial pass. These findings remain visible in the ignored local review packet; passing infrastructure tests is not sample acceptance.
 
 ### F. One Azure worker and sample iteration
 

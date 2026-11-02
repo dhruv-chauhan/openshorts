@@ -52,6 +52,13 @@ def check_spoken_market_names(story, markets, transcript):
     """Reject invented ID links; lexical presence is necessary, not sufficient."""
     text = ' '.join(w.word for segment in transcript.segments for w in segment.words
                     if w.start >= story.span.start and w.end <= story.span.end)
+    spoken=set(spoken_market_ids(text,markets))
+    if not set(story.matched_market_ids).issubset(spoken):
+        raise ValueError('market ID has no spoken name/alias in its story')
+
+
+def spoken_market_ids(text, markets):
+    """Lexical hints only; they do not establish relevance or disambiguation."""
     def names(market):
         for name in [market.underlying_name, *market.aliases]:
             yield name
@@ -61,11 +68,8 @@ def check_spoken_market_names(story, markets, transcript):
                               '', name, flags=re.I).strip()
             if stripped:
                 yield stripped
-    by_id = {m.market_id: m for m in markets.markets}
-    for market_id in story.matched_market_ids:
-        if not any(re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, re.I)
-                   for name in names(by_id[market_id])):
-            raise ValueError('market ID has no spoken name/alias in its story')
+    return [market.market_id for market in markets.markets if market.enabled and any(
+        re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, re.I) for name in names(market))]
 
 
 def boundary_reviews(story, transcript):
@@ -134,6 +138,13 @@ def resolve_drafts(response, segments):
             if last < first or not set(story.evidence_segment_ids).issubset(
                     {s.segment_id for s in segments[first:last+1]}):
                 raise ValueError('evidence/boundaries do not belong to the story')
+            # ASR segments are not sentence boundaries. Expand only within the
+            # complete region, then run the same overlap, duration and semantic checks.
+            terminal = lambda word: word.rstrip('"\'”’)]}').endswith(('.', '?', '!'))
+            while first > 0 and not terminal(segments[first-1].words[-1].word):
+                first -= 1
+            while last + 1 < len(segments) and not terminal(segments[last].words[-1].word):
+                last += 1
             data = story.model_dump(exclude={'first_segment_id', 'last_segment_id',
                 'evidence_segment_ids', 'context_segment_ids', 'attribution'})
             attribution = story.attribution
@@ -228,6 +239,7 @@ def select_stories(config, source, transcript, policy, markets, call, *, knowled
             'window_map': [d.model_dump() for w, d in zip(windows, decisions)
                            if w['first'] <= last and w['last'] >= first],
             'segments': [{'segment_id': s.segment_id, 'start': s.start, 'end': s.end, 'text': s.text,
+                          'spoken_market_ids':spoken_market_ids(' '.join(w.word for w in s.words),markets),
                           'boundary_hint': 'ASR segment; may start/end inside a sentence'} for s in segments],
             'timing_warnings': transcript.timing_warnings}
         def normalized(response):

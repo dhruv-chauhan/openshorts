@@ -1,0 +1,2 @@
+-r requirements-clip-foundry.txt
+azure-storage-blob==12.31.1

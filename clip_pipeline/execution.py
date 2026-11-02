@@ -1,6 +1,7 @@
 """Sequential manual-span controller; only committed manifests are checkpoints."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
@@ -16,6 +17,18 @@ from .contracts import RunManifest, SourceArtifact, ManualRenderRequest
 from .media_common import MediaError, disk_check, reference
 from .profile import media_environment
 from .runner import inspect_run, transition
+
+
+@contextmanager
+def termination():
+    """Translate container termination into checkpointable cancellation."""
+    def interrupted(_signum, _frame):
+        raise KeyboardInterrupt
+    old = signal.signal(signal.SIGTERM, interrupted)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, old)
 
 
 def _commit(store, manifest):
@@ -114,7 +127,6 @@ def execute_manual(workspace: Path, run_id: str):
 
 def execute_stories(workspace: Path, run_id: str, *, stop_after_stories: int | None = None):
     """Resume only pinned inputs. A failed story is explicit and retryable on request."""
-    from contextlib import contextmanager
     from .contracts import StoryPlan, StoryArtifact, SequenceManifest, StoryProgress, TranscriptArtifact
     from .artifacts import digest
     from .stories import all_stories, validate_plan_source, validate_plan_transcript
@@ -122,16 +134,6 @@ def execute_stories(workspace: Path, run_id: str, *, stop_after_stories: int | N
 
     if stop_after_stories is not None and stop_after_stories < 1:
         raise ArtifactError("stop-after-stories must be positive")
-
-    @contextmanager
-    def termination():
-        def interrupted(_signum, _frame):
-            raise KeyboardInterrupt
-        old = signal.signal(signal.SIGTERM, interrupted)
-        try:
-            yield
-        finally:
-            signal.signal(signal.SIGTERM, old)
 
     store = ArtifactStore(workspace)
     with store.lock(), termination():

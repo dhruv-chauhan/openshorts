@@ -138,6 +138,18 @@ class MediaConfig(Contract):
 
 
 class AuditConfig(Contract):
+    whisper_model: Text = "small"
+    context_padding_seconds: Annotated[float, Field(ge=0, le=600)] = 45.0
+
+    @model_serializer(mode="wrap")
+    def preserve_defaults(self, handler):
+        data = handler(self)
+        if self.whisper_model == "small":
+            data.pop("whisper_model", None)
+        if self.context_padding_seconds == 45.0:
+            data.pop("context_padding_seconds", None)
+        return data
+
     final_audio_asr: Literal[True] = True
     require_manual_review: Literal[True] = True
 
@@ -151,7 +163,10 @@ class BlobConfig(Contract):
     @classmethod
     def account_endpoint(cls, value):
         clean_https_url(value)
-        if urlsplit(value).path not in ("", "/"):
+        parsed = urlsplit(value)
+        if not (parsed.hostname or '').endswith('.blob.core.windows.net') or parsed.port not in (None, 443):
+            raise ValueError("expected an Azure Blob account endpoint")
+        if parsed.path not in ("", "/"):
             raise ValueError("expected a storage account URL, not a container or blob")
         return value.rstrip("/")
 

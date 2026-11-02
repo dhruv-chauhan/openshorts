@@ -1,13 +1,13 @@
 {
   "schema_version": "1",
-  "version": "market-policy-v2-stories",
+  "version": "market-policy-v3-contextual-audit",
   "allowed_market_description": "Substantive views, news, updates, analysis, explanation, education or advice about an enabled market's underlying asset or company. A passing mention does not qualify.",
   "equity_macro_description": "Explain a direct equity-market connection through corporate economics, earnings, borrowing costs, discount rates, inflation, demand, investor sentiment, liquidity or capital flows. A specific ticker is optional; do not invent a connection absent from the content.",
   "rules": [
     {
       "rule_id": "substantive_relevance",
       "severity": "reject",
-      "instruction": "Require an allowed-market match or evidenced equity-market macro mechanism, supported by exact transcript spans.",
+      "instruction": "Require an allowed-market match or evidenced equity-market macro mechanism, supported by exact transcript spans. A standalone founder/interview anecdote without substantive business, competitive, regulatory or economic explanation is insufficient; omit it rather than speculate.",
       "positive_examples": [
         "An explanation of how borrowing costs affect corporate earnings."
       ],
@@ -33,17 +33,17 @@
     {
       "rule_id": "grounded_copy",
       "severity": "reject",
-      "instruction": "Do not invent claims, numbers, urgency or investment recommendations in titles, hooks or captions."
+      "instruction": "Do not invent claims, numbers, urgency or investment recommendations in titles, hooks or captions. Slower revenue growth or reduced efficiency alone does not imply falling compute demand or purchases; source evidence must support any such mechanism."
     },
     {
       "rule_id": "material_numbers",
       "severity": "review",
-      "instruction": "Flag ambiguity in currencies, units, prices, percentages or earnings periods; preserve their exact meaning."
+      "instruction": "Preserve numeric meaning, units, attribution and caveats. Unintelligible numbers, unclear reference assets, ASR disagreement or lost qualifications require review/rejection as appropriate. An intelligible attributed report with its explicit uncertainty intact does not require external truth verification solely because the speaker cannot independently confirm it."
     },
     {
       "rule_id": "freshness",
       "severity": "review",
-      "instruction": "Keep historical and uncertain event dates explicit. Do not present old news or predictions as current."
+      "instruction": "Preserve the temporal framing actually established by the source. Historical years/quarters can be sufficient; do not require an exact calendar day unless that precision changes meaning or is necessary for a time-sensitive inferred association. Do not present old news or predictions as current, or invent event dates from publication dates."
     },
     {
       "rule_id": "distinct_moment",

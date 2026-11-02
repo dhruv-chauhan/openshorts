@@ -17,6 +17,8 @@ Unknown event date is null, including an uncertain year. A complete event_date (
 explicitly present in the story evidence; never derive it from the current date. Publication date does not
 prove event date. Set time_sensitive=true for current/historical news or quantitative
 claims; evergreen means an explanation independent of a particular dated event.
+Slower revenue growth or lower computational efficiency does not establish reduced
+compute demand, purchases or bearish price direction without explicit source support.
 No source stance is inferred here. Category tags are candidate generation, not proof
 of significant impact. Missing profile coverage is allowed; never force a subject.
 '''
@@ -32,11 +34,13 @@ existing in-story segment IDs as evidence even when explaining why a link is uns
 Use needs_review for unresolved plausibly material effects and unsupported for weak,
 incidental or contradicted links. Exposure direction may differ by role; absent evidence
 is unclear, not positive/neutral. A direct candidate still needs substantive discussion.
+Do not infer falling compute demand or purchases merely from slower revenue growth or
+lower efficiency. Preserve uncertainty about the magnitude and direction of effects.
 No count quota and no extra credit for more markets. Unknown or stale temporal evidence
 cannot establish a supported inference. Knowledge summaries are background, not quotes
 from the story. Do not write titles/captions or attribute inferred effects to a speaker.
 '''
-PROMPT_VERSION = 'market-enrichment-v1'
+PROMPT_VERSION = 'market-enrichment-v2'
 
 
 def load_knowledge(settings):

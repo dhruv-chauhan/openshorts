@@ -1,4 +1,4 @@
--r requirements-clip-foundry.txt
+-r requirements-clip-storage.txt
 # CPU torch/torchvision are installed from the PyTorch CPU index by the image.
 numpy==1.26.4
 opencv-python==4.11.0.86

@@ -32,4 +32,5 @@ jobs:
           path: |
             output/clip-media-smoke/smoke/smoke-report.json
             output/clip-media-smoke/smoke/stories/story-smoke-report.json
+            output/clip-media-smoke/smoke/stories/audit/audit-smoke-report.json
             output/clip-media-smoke/smoke/workspace/runs/**/worker.log

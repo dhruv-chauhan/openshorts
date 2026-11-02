@@ -100,7 +100,9 @@ plan_path.write_text(json.dumps(plan))
 changed=cli(['render-stories','--config',config_path,'--plan',plan_path,'--transcript',transcript_path,'--prepare-only'])
 assert changed['input_fingerprint']!=complete['input_fingerprint']
 assert all(p['state']=='pending' for p in changed['story_progress'].values())
+subprocess.run([sys.executable,'/app/tests/audit_media_smoke.py',str(config_path),
+    config['workspace'],complete['run_id'],str(root/'audit')],check=True,timeout=900)
 (root/'story-smoke-report.json').write_text(json.dumps({'ok':True,'real_media':True,
     'separate_outputs':True,'signal_interruption_and_resume':True,'completed_story_unchanged':True,
-    'rate_change_invalidated_outputs':True,'rates':[1.0,1.1],'run':complete},indent=2)+'\n')
+    'rate_change_invalidated_outputs':True,'final_audio_audit_smoke_passed':True,'rates':[1.0,1.1],'run':complete},indent=2)+'\n')
 print('Story media smoke passed')

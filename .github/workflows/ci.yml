@@ -21,13 +21,13 @@ jobs:
       # for the MCP endpoint tests, google-genai covers gemini_worker.
       - name: Install test dependencies
         run: >
-          pip install pytest pillow httpx pydantic sqlalchemy greenlet numpy
+          pip install pytest==8.4.2 pillow httpx pydantic sqlalchemy greenlet numpy tqdm
           opencv-python-headless python-dotenv google-genai fastapi boto3
           PyJWT email-validator python-multipart
       - name: Run tests
         # Foundry transport tests use the same pinned SDK as the clip-only worker.
         run: |
-          pip install -r requirements-clip-foundry.txt
+          pip install -r requirements-clip-storage.txt
           pytest tests/ -v
 
   clip-only-no-google:
@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install clip-only provider and import-test dependencies
-        run: pip install -r requirements-clip-foundry.txt pytest httpx python-dotenv opencv-python-headless pillow tqdm
+        run: pip install -r requirements-clip-storage.txt pytest==8.4.2 httpx python-dotenv opencv-python-headless pillow tqdm
       - name: Verify no Google SDK and test isolated profile
         run: |
           python -c "from importlib.metadata import distributions; assert 'google-genai' not in {d.metadata['Name'].lower() for d in distributions()}"
