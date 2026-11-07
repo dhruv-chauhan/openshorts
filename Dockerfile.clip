@@ -1,5 +1,5 @@
 # Linux amd64 matches the initial Azure CPU worker and MediaPipe wheel support.
-FROM python:3.11-slim-bookworm AS dependencies
+FROM python:3.11-slim-bookworm@sha256:94a8fee35252d06ab75856f15f12c7bae67b10e8a6da93c7fded82b2610926cd AS dependencies
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHON_DOTENV_DISABLED=1 PIP_NO_CACHE_DIR=1 \
     HF_HOME=/opt/models/huggingface YOLO_MODEL_PATH=/opt/models/yolov8n.pt \
@@ -9,11 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements-clip-core.txt requirements-clip-foundry.txt requirements-clip-storage.txt requirements-clip-media.txt ./
 RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.11.0 torchvision==0.26.0
-RUN pip install -r requirements-clip-media.txt && pip check
+RUN pip install -r requirements-clip-media.txt && pip check && pip freeze > /opt/worker-dependencies.txt
 
 FROM dependencies AS runtime
 # Match the main image's supported JS runtime; EJS ships with yt-dlp[default].
-COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+COPY --from=denoland/deno:bin@sha256:b507583d3c68ba69f3ed2ce5969ae5b8b70f43421c781279c7aea06435263543 /deno /usr/local/bin/deno
 COPY *.py ./
 COPY clip_pipeline ./clip_pipeline
 COPY configs ./configs

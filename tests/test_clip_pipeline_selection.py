@@ -287,3 +287,42 @@ def test_draft_expands_fragment_to_local_sentence_completion(media_case):
     resolved=resolve_drafts(DraftResponse.model_validate(data),transcript.segments).sequences[0].stories[0]
     assert resolved.span.start==transcript.segments[0].words[0].start
     assert resolved.span.end==transcript.segments[-1].words[-1].end
+
+
+def test_ticker_aliases_do_not_turn_ordinary_speech_into_company_hints():
+    from clip_pipeline.contracts import MarketSnapshot
+    from clip_pipeline.selection import spoken_market_ids
+    markets=MarketSnapshot.model_validate({'version':'synthetic','markets':[
+        {'market_id':'xyz:BE','underlying_name':'Example Energy','aliases':['BE'],'enabled':True,'asset_type':'equity'},
+        {'market_id':'xyz:NOW','underlying_name':'Example Software','aliases':['NOW'],'enabled':True,'asset_type':'equity'},
+    ]})
+    assert spoken_market_ids('There may be a change now.',markets)==[]
+    assert spoken_market_ids('BE and NOW shares fell.',markets)==['xyz:BE','xyz:NOW']
+    assert spoken_market_ids('example energy and EXAMPLE SOFTWARE earnings',markets)==['xyz:BE','xyz:NOW']
+
+
+def test_automatic_draft_cannot_put_required_caveat_outside_story(media_case):
+    from clip_pipeline.selection import resolve_drafts
+    config,source,transcript=scenario(media_case,['The company reported growth.','These figures are unconfirmed.'])
+    policy,_=load_inputs(config);call,_=model_call(transcript,policy)
+    data=call('selection','',{},DraftResponse,lambda _:None).model_dump()
+    data['sequences'][0]['stories'][0].update(first_segment_id='s0',last_segment_id='s0',
+        evidence_segment_ids=['s0'],context_segment_ids=['s1'])
+    with pytest.raises(ValueError,match='required context'):
+        resolve_drafts(DraftResponse.model_validate(data),transcript.segments)
+
+
+def test_pre_render_check_uses_actual_display_fields_not_routing_flags(media_case):
+    from clip_pipeline.selection import check_presentation,resolve_drafts
+    from clip_pipeline.audit import display_metadata
+    config,source,transcript=scenario(media_case,['Rates affect stock profits.'])
+    policy,_=load_inputs(config);call,_=model_call(transcript,policy)
+    draft=call('selection','',{},DraftResponse,lambda _:None)
+    response=resolve_drafts(draft,transcript.segments)
+    result=check_presentation(response)
+    story=result['proposals']['sequences'][0]['stories'][0]
+    assert 'freshness' not in story and 'event_date' not in story
+    assert 'evidence' in story and 'context' in story
+    from clip_pipeline.contracts import StorySpec
+    assert result['displayed_metadata'][story['story_id']]==display_metadata(StorySpec.model_validate(story))
+    assert 'stance' not in result['displayed_metadata'][story['story_id']]

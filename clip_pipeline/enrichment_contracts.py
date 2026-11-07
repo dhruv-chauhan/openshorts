@@ -2,7 +2,7 @@
 from datetime import date
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator, model_serializer
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Id = Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$')]
@@ -182,3 +182,11 @@ class StoryEnrichment(Record):
     review_reasons: list[Text]
     # True means all candidates were assessed, not that all are supported.
     coverage_complete: bool
+    assessment_history: list[AssociationResponse] = Field(default_factory=list)
+
+    @model_serializer(mode='wrap')
+    def preserve_old_hashes(self, handler):
+        data = handler(self)
+        if not self.assessment_history:
+            data.pop('assessment_history', None)
+        return data

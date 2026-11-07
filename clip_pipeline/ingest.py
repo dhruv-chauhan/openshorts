@@ -11,6 +11,40 @@ from .contracts import SourceArtifact, SourceInput
 from .media_common import MediaError, disk_check, file_hash, probe
 
 
+def seed_source(config, artifact, media):
+    """Import already acquired YouTube bytes while retaining source provenance."""
+    import shutil
+    from uuid import uuid4
+    from .artifacts import ArtifactStore
+    if artifact.origin.kind != 'youtube':
+        raise MediaError('cache_import_requires_youtube_provenance')
+    with ArtifactStore(Path(config.workspace)).lock():
+        info = _check_source(media,config)
+        if file_hash(media) != artifact.media_sha256 or abs(info['duration']-artifact.duration_seconds)>.001:
+            raise MediaError('cache_import_source_mismatch')
+        cache=Path(config.workspace)/'cache'
+        locator=cache/'locators'/(digest(artifact.origin)+'.json')
+        if locator.exists() and read_json_model(locator,SourceArtifact) != artifact:
+            raise MediaError('cache_import_locator_conflict')
+        blob=cache/'sources'/artifact.media_sha256/'source.media'
+        blob.parent.mkdir(parents=True,exist_ok=True)
+        disk_check(blob.parent,config.limits.min_free_disk_bytes+media.stat().st_size)
+        temporary=blob.with_name('.import-'+uuid4().hex)
+        try:
+            if not blob.exists():
+                shutil.copyfile(media,temporary)
+                if file_hash(temporary)!=artifact.media_sha256:
+                    raise MediaError('cache_import_source_changed')
+                temporary.rename(blob)
+            if file_hash(blob)!=artifact.media_sha256:
+                raise MediaError('source_cache_corrupt')
+            locator.parent.mkdir(parents=True,exist_ok=True)
+            atomic_write(locator,json_bytes(artifact))
+        finally:
+            temporary.unlink(missing_ok=True)
+    return {'source_sha256':artifact.media_sha256,'origin':artifact.origin.model_dump(),'approved':False}
+
+
 def _check_source(path, config):
     if path.stat().st_size > config.limits.max_source_bytes:
         raise MediaError("source_size_limit")

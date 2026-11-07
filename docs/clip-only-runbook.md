@@ -25,7 +25,7 @@ Keep the real config under ignored `output/clip-only-azure/` or outside the repo
 Authentication is explicit:
 
 - `developer_identity`: uses only the signed-in Azure CLI identity (`az login`), with automatic token refresh. It does not search other developer credentials.
-- `managed_identity`: uses only Azure Managed Identity; optionally set `managed_identity_client_id` for a user-assigned identity. Verify this again inside the eventual worker container.
+- `managed_identity`: uses only Azure Managed Identity; optionally set `managed_identity_client_id` for a user-assigned identity. The F worker passed with `identity_scope=https://cognitiveservices.azure.com/.default` and the approved account-scoped gateway plus OpenAI User roles; its developer-identity audience returned 401. Verify the actual worker container, without automatic credential fallback.
 - `api_key`: reads only the variable named by `api_key_env`. The value is never saved in configuration or usage output.
 
 The identity needs inference data permissions on the resource. **Cognitive Services OpenAI User** covers OpenAI deployment calls. For the Foundry gateway, Microsoft documents a custom role with `Microsoft.CognitiveServices/accounts/MaaS/*`, or the broader Cognitive Services User role, for [keyless inference](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/configure-entra-id). The wildcard includes inference APIs beyond chat completions. Granular `MaaS/chat/completions/action` and `MaaS/v1/chat/completions/action` permissions exist, but did not resolve the development v1 probe's `PermissionDenied` response; do not assume those roles alone prove v1 access. Role configuration remains an operator action outside the preflight command. New role assignments can take time to propagate. The default token scope is `https://ai.azure.com/.default`; `https://cognitiveservices.azure.com/.default` is also an explicit supported setting. Neither authentication failures nor missing deployments fall back to API keys or another provider.
@@ -467,10 +467,206 @@ The initial E validation used the existing C.1 reference clips, independent `sma
 Whisper ASR and live Foundry audits. It did not approve withheld D.1 proposals. The
 reference is still unapproved: captions and metadata need further attention, and the
 auditor can overflag unknown speaker/stance or quarter context. This is an audit/review
-baseline, not a claim of editorial precision across channels. SDK storage validation
-used local Azurite; Azure RBAC has not yet been tested for storage.
+baseline, not a claim of editorial precision across channels. E’s SDK storage validation used local Azurite. F subsequently verified private Blob
+access, exact-byte upload/download and immutable retry from the actual VM container
+using its container-scoped managed identity.
 
 The offline media CI smoke now also runs `tests/audit_media_smoke.py` on generated
 speech: final-media checks, fresh final-audio ASR, checkpoint reuse, no Foundry calls,
 and no Google SDK. Its `tiny` model override is only for the synthetic test; the
 reference validation and default audit configuration use `small`.
+
+
+## Phase F worker and quality iteration
+
+Phase E was pushed as `764f169`. Phase F adds the [one-worker deployment and recovery
+instructions](../infra/clip-worker/README.md), measured explicit jobs and private
+checkpoint backup/restore. Keep all actual deployment values and source artifacts in
+ignored local paths. Review the worker result's backup/monitor fields as well as its
+CLI exit code. These operational records are never approval records.
+
+Acquire/transcribe once, without creating a throwaway manual clip:
+
+```bash
+python -m clip_pipeline source --config '<config.json>' --url '<youtube-url>'
+python -m clip_pipeline resume --workspace '<workspace>' --run-id '<source-run-id>' --source-only
+```
+
+Use the returned `source_artifact` and `transcript` paths for `select`. A completed
+source run is a checkpoint, not completed/published content. For caption iteration,
+set `media.whisper_model` to `medium` in the new effective config and create a fresh
+source run; keep the earlier run for comparison. Independent final-audio audit uses
+`audit.whisper_model`; the latest sample comparison uses `medium` after `small` garbled
+a company name. Never change a pinned config inside an existing run.
+
+The v3 auditor and v4 evidence policy no longer demand optional speaker/stance tags
+merely because a speaker uses first-person language. Unknown optional display fields
+are omitted rather than presented as neutral or guessed. Relative-quarter wording and
+attributed unconfirmed figures are evaluated for preservation of meaning. Altered
+numbers, removed qualifiers, invented price direction and garbled numeric ASR still
+trigger rejection/review. Regenerate audit packets after these metadata/policy changes;
+old approval hashes do not apply.
+
+The live synthetic calibration runner is `tests/audit_live_smoke.py`. Its seven
+cases test these distinctions against Foundry. Calibration is not a precision claim
+and cannot approve the real reference clips. Final acceptance requires complete
+playback and explicit hash-bound human decisions.
+
+
+The current F source iteration uses medium ASR and correctly recognizes the company
+name previously garbled by small ASR. The original continuation-window review has
+been independently resolved with adjacent-source evidence; direct IDs remain empty
+where the name is not spoken inside the window. The current selection still holds its
+sequence for review of qualified financial figures. Its automatic plan remains empty.
+No reference clip has been approved or published.
+
+Context review resolution is an explicit two-call stage in selection prompt v11. It
+revisits reviewed windows with reconstructed surrounding discussion, requires exact
+quotes from both the window and adjacent source, and asks an independent verifier to
+confirm that the original uncertainty is resolved. Direct market IDs still require
+spoken names inside the window. Insufficient context, invalid evidence, incomplete
+coverage, model failure or verifier disagreement cannot clear the hold. The report
+preserves initial decisions, proposals, checks and effective decisions; the preview
+exposes that history. Final story/sequence checks and human approval remain separate.
+
+A stronger ASR model can be compared by creating a new config/run and reusing the
+verified source cache. Never patch the old transcript or its hashes. Keep the model
+identity, source binding and before/after artifacts for caption review; increased model
+size alone does not establish correctness of every word.
+
+Automatic draft `context_segment_ids` now denotes required in-story dependencies;
+a proposed cut that puts one outside its boundaries fails validation. Full source
+context remains available to policy/audit stages for omitted-context checking, while
+association classification/assessment receives only in-story evidence IDs. This prevents
+background context from being used as if it were spoken in the delivered clip.
+
+For a targeted selection iteration, `select --reuse-run-id '<completed-selection-id>'`
+reuses only exact provider requests with identical Foundry settings. The parent manifest
+is hash-pinned and each typed response is revalidated by current code. Changed prompts,
+payloads or schemas cause new calls; prior plans and gate outcomes are never reused.
+
+A held selection can be rendered explicitly for private inspection without releasing
+its automatic plan:
+
+```bash
+python -m clip_pipeline render-stories --config '<config.json>' --review-selection-run-id '<held-selection-id>'
+python -m clip_pipeline audit --config '<config.json>' --render-workspace '<workspace>' --render-run-id '<review-render-id>'
+```
+
+This requires complete source coverage and validates all proposed spans, evidence and
+configured limits. It copies the original selection report into the render's pinned
+inputs and marks the plan `review_only=true`. The preview is labeled accordingly.
+Every final story and sequence audit carries a deterministic `selection_review_hold`
+rejection regardless of model verdict. Human review cannot override it and promotion
+cannot publish it. Resolve the selection findings and create a new normal render before
+approval. Do not edit the marker, pinned plan, source transcript or audit artifacts.
+This path produces evidence for review; it does not convert a held proposal into an
+accepted candidate or satisfy the Phase F acceptance gate.
+
+The reference review-only render and first final-media audit have completed. All media
+checks passed; final numeric/caveat checks passed while unsupported directional/exposure
+metadata was rejected. A completed-render resume returned the identical checkpoint.
+Sampled frames confirm the corrected company caption, with caption size/footer overlap
+still requiring visual refinement. A stronger independent final-ASR comparison is kept
+separate from the earlier small-model audit; neither changes its source or rendered bytes.
+
+The medium final-ASR comparison has completed and recognizes the company correctly.
+Both final audits retain exposure-metadata rejections. A separate artifact inspection
+also records a word-level caption/ASR disagreement that the semantic auditor missed;
+therefore semantic checks alone cannot establish caption accuracy. The private review
+packet includes these supplementary findings and sampled-frame concerns alongside the
+unchanged audit artifacts. The worker is deallocated; the sample is still unapproved.
+
+### Phase F metadata and caption refinements
+
+Selection prompt v12 and enrichment v4 distinguish topic relevance, editorial economic
+exposure and speaker price stance. Category classification mechanisms remain diagnostic;
+public category metadata contains only category IDs and source evidence references.
+A second association call verifies every proposed link against the actual source and
+applicable one-hop knowledge. It cannot promote an unsupported/review link or silently
+reverse its direction. Both responses are retained. Final audit v5 evaluates editorial
+inference against its evidence without treating it as a speaker-attributed price view.
+Operating exposure does not assert stock returns; unknown magnitude does not negate
+a supported direction. A relationship alone still cannot establish an economic event.
+The opt-in `tests/audit_live_smoke.py --case ...` calibration distinguishes direct
+relevance, unsupported equipment-demand claims and supported supplier relationships.
+
+The clip-only profile supports an optional caption style, independent of the legacy
+application's global style. Settings below use final-output pixels:
+
+```json
+{
+  "media": {
+    "layout": "preserve_full_width",
+    "caption_style": {
+      "font_size": 64,
+      "horizontal_margin": 72,
+      "content_gap": 48,
+      "bottom_safe_margin": 256,
+      "max_lines": 2,
+      "max_duration": 3.5,
+      "max_gap": 0.65
+    }
+  }
+}
+```
+
+This uses the bundled font, sentence case, measured wrapping, a subdued panel and
+explicit 1080×1920 ASS coordinates. Caption phrases preserve every source word and
+its enclosing observed times, including coalesced ASR units. The safe caption area is
+below the full-width picture and above the configured app-controls margin. Insufficient
+space or an unwrappable token fails explicitly; this preset is not suitable for a
+portrait source that occupies the full frame. Omit `caption_style` to reproduce an old
+run's legacy style. Old configuration hashes remain unchanged.
+
+A word correction can be proposed from a verified independent final-audio transcript:
+
+```bash
+python -m clip_pipeline.corrections \
+  --transcript '<original-transcript.json>' --story '<story-artifact.json>' \
+  --inspection '<media-inspection.json>' --media '<delivered-video.mp4>' \
+  --patch '<correction-patch.json>' --output '<new-correction-directory>'
+```
+
+The patch specifies `segment_id`, `word_index`, exact `before` text and replacement
+`after` text. The command verifies media/source hashes, a temporally aligned occurrence
+in independent ASR, and the original word. It preserves word timing and writes a new
+directory containing original/corrected transcripts and supporting evidence. It does
+not claim human listening or verification. Corrections remain `pending_review`; every
+affected story/sequence audit gets a review issue requiring explicit evidence-backed
+human resolution. Use the resulting transcript for a new selection and render.
+
+Final-media inspection now compares caption words against independent audio ASR in
+addition to semantic assessment. Case and ordinary punctuation differences are
+normalized; lexical changes remain visible in `word_disagreements` and cause a review
+issue even if the semantic model passes. These differences can be benign ASR variants;
+they are not automatic proof of altered speech. No existing audit is rewritten.
+
+The refinement reference run completed selection, separate-story rendering and fresh
+final-audio/semantic audits. Sampled delivered frames confirm the smaller captions sit
+below the source footer; full playback acceptance remains pending. Independent audio
+ASR agrees with the proposed word correction, which still requires human confirmation.
+The audit retains a substantive exposure-metadata rejection on one story and lexical
+ASR review findings. A passing sequence assessment cannot override a rejected story.
+The corrected synthetic calibration cases pass, but they do not establish production
+accuracy or waive findings on the reference. Prior clips and audits remain preserved;
+the private refinement comparison packet contains both versions and exact findings.
+Phase F's sample acceptance gate remains open; no promotion was performed.
+
+
+### Phase F sample acceptance
+
+The user accepted the delivered sample and caption presentation on 2026-11-07 and
+confirmed the proposed lexical correction. Phase F is complete as an implementation
+milestone; the earlier pending-acceptance notes describe the historical audit state.
+The private acceptance record is separate from immutable render/audit artifacts.
+Existing hard failures and unresolved per-item review records remain enforced, and
+no approved-storage promotion was requested or performed.
+
+Next evaluation expands to multiple sources. The requested policy direction allows
+an ambiguous exposure discussion to be clarified by later stories in the same
+explicitly linked sequence. That policy extension is not yet implemented: the current
+auditor still applies standalone-story checks. Define and test the dependency before
+relaxing those checks, and keep asserted metadata grounded. The current reference
+stories have separate sequence manifests; their order alone is not proof of later
+clarification. See the plan's acceptance and follow-up section for the evaluation scope.

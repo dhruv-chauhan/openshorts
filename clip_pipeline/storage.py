@@ -45,7 +45,7 @@ class BlobSink:
         client=self.client.get_container_client(container)
         try:client.create_container()
         except ResourceExistsError:pass
-        if client.get_container_access_policy().get('public_access') is not None:
+        if client.get_container_properties().get('public_access') is not None:
             raise StorageError('destination_container_is_public')
 
     def put(self,container,key,*,path=None,data=None,sha256,size_bytes):

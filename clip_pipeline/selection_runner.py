@@ -19,7 +19,7 @@ def prompt_snapshot(enriched=False):
     return prompts.snapshot(enriched)
 
 
-def prepare_selection(config_path, source_path, transcript_path):
+def prepare_selection(config_path, source_path, transcript_path, *, reuse_run_id=None):
     config = load_config(config_path)
     policy, markets = load_inputs(config)
     source = read_json_model(source_path, SourceArtifact)
@@ -39,6 +39,17 @@ def prepare_selection(config_path, source_path, transcript_path):
         inputs['market_input'] = markets
     store = ArtifactStore(Path(config.workspace))
     with store.lock():
+        if reuse_run_id is not None:
+            parent = inspect_run(store.workspace, reuse_run_id)
+            if parent.execution_kind != 'topic_selection' or parent.state not in {'finished','checkpointed'}:
+                raise ArtifactError('reuse requires a completed selection checkpoint')
+            parent_dir = store.run_dir(reuse_run_id)
+            parent_config = read_json_model(parent_dir / parent.artifacts['config'].path, PipelineConfig)
+            if parent_config.foundry != config.foundry:
+                raise ArtifactError('reuse requires identical provider and model settings')
+            from .media_common import file_hash
+            inputs['reuse_selection'] = {'run_id': reuse_run_id,
+                'manifest_sha256': file_hash(parent_dir/'manifest.json')}
         run_id = uuid4().hex
         refs = {key: store.write_artifact(run_id, key + '.json', value) for key, value in inputs.items()}
         now = datetime.now(timezone.utc)
@@ -75,6 +86,14 @@ def execute_selection(workspace, run_id, *, backend_factory=FoundryBackend):
             raise ArtifactError('selection implementation changed; prepare a new run')
         save(state='running', stage='transcribed', reason_code='selection_started')
         try:
+            reuse = None
+            if 'reuse_selection' in manifest.artifacts:
+                from .media_common import file_hash
+                lineage = json.loads(path('reuse_selection').read_text())
+                parent_dir = store.run_dir(lineage['run_id'])
+                if file_hash(parent_dir/'manifest.json') != lineage['manifest_sha256']:
+                    raise ArtifactError('reuse parent changed after preparation')
+                reuse = inspect_run(store.workspace,lineage['run_id'])
             if 'markets' not in manifest.artifacts:
                 settings = config.markets
                 if settings.mode in {'mock_api', 'snapshot'}:
@@ -101,6 +120,13 @@ def execute_selection(workspace, run_id, *, backend_factory=FoundryBackend):
                     if key in manifest.artifacts:
                         response = read_json_model(path(key), model)
                         validate(response)
+                        return response
+                    if reuse is not None and key in reuse.artifacts:
+                        response = read_json_model(parent_dir/reuse.artifacts[key].path,model)
+                        validate(response)  # Current checks apply to every cached response.
+                        artifact(key,response)
+                        reused = json.loads(path('reused_calls').read_text()) if 'reused_calls' in manifest.artifacts else []
+                        artifact('reused_calls',reused+[{'key':key,'parent_run_id':reuse.run_id}])
                         return response
                     response = backend.generate(stage=stage, system=system, payload=payload,
                                                 response_model=model, validate=validate)

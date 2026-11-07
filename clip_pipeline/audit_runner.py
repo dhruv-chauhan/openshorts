@@ -128,7 +128,10 @@ def execute_audit(workspace,run_id,*,backend_factory=FoundryBackend,worker=_work
                         'source_context':source_context(transcript,story.span.start,story.span.end,config.audit.context_padding_seconds),
                         'selected_source':selected_source(transcript,story.span.start,story.span.end),
                         'final_audio':final_segments(inspection),'caption_sidecar':inspection.captions_text}
-                    deterministic=[*inspection.issues,*metadata_issues(story,markets,knowledge,previous_markets)]
+                    from .review_render import review_only_issues
+                    from .corrections import correction_issues
+                    deterministic=[*inspection.issues,*metadata_issues(story,markets,knowledge,previous_markets),
+                                   *review_only_issues(plan),*correction_issues(transcript,story.span.start,story.span.end)]
                     if not inspection.transcript:
                         deterministic.append(AuditIssue(issue_id='final_asr_missing',rule_id='audit_complete',severity='reject',kind='media',
                             explanation='Final audio could not be audited; correct media and rerun.',source_segment_ids=[],final_segment_ids=[]))
@@ -144,9 +147,9 @@ def execute_audit(workspace,run_id,*,backend_factory=FoundryBackend,worker=_work
                         'omitted_source_intervals':[{'start':a.span.end,'end':b.span.start} for a,b in zip(seq.stories,seq.stories[1:]) if b.span.start>a.span.end],
                         'final_audio':[x for s in seq.stories for x in final_segments(inspections[s.story_id],s.story_id+':')],
                         'caption_sidecars':{s.story_id:inspections[s.story_id].captions_text for s in seq.stories}}
-                    deterministic=[]
+                    deterministic=review_only_issues(plan) + correction_issues(transcript,seq.stories[0].span.start,seq.stories[-1].span.end)
                     if any(not inspections[s.story_id].transcript for s in seq.stories):
-                        deterministic=[AuditIssue(issue_id='sequence_audio_incomplete',rule_id='audit_complete',severity='reject',kind='media',
+                        deterministic += [AuditIssue(issue_id='sequence_audio_incomplete',rule_id='audit_complete',severity='reject',kind='media',
                             explanation='One or more final story transcripts are missing.',source_segment_ids=[],final_segment_ids=[])]
                     result=audit_item('sequence',seq.sequence_id,target,payload,policy,call,deterministic)
                     sequence_results.append(result)
@@ -170,11 +173,19 @@ def validate_audit_checkpoint(manifest,directory,config):
     if 'audit_bundle' not in manifest.artifacts:raise ArtifactError('missing audit bundle')
     bundle=read_json_model(directory/manifest.artifacts['audit_bundle'].path,AuditBundle)
     if bundle.binding!=audit_binding(manifest):raise ArtifactError('audit input binding mismatch')
-    _,plan,_,_,_,_=audit_inputs(manifest,directory)
+    _,plan,_,transcript,_,_=audit_inputs(manifest,directory)
     for kind,items,expected in [('story',bundle.stories,{s.story_id for s in all_stories(plan)}),
                                ('sequence',bundle.sequences,{q.sequence_id for q in plan.sequences})]:
         if len(items)!=len(expected) or {i.item_id for i in items}!=expected:raise ArtifactError('incomplete audit coverage')
         for item in items:
+            from .review_render import review_only_issues
+            if any(issue not in item.deterministic_issues for issue in review_only_issues(plan)):
+                raise ArtifactError('review-only audit hold missing')
+            from .corrections import correction_issues
+            targets = {s.story_id:(s.span.start,s.span.end) for s in all_stories(plan)} if kind=='story' else {
+                q.sequence_id:(q.stories[0].span.start,q.stories[-1].span.end) for q in plan.sequences}
+            if any(issue not in item.deterministic_issues for issue in correction_issues(transcript,*targets[item.item_id])):
+                raise ArtifactError('transcript correction review missing')
             key='render.story.'+item.item_id+'.story' if kind=='story' else 'render.sequence.'+item.item_id
             model=StoryArtifact if kind=='story' else SequenceManifest
             if item.kind!=kind or item.target_sha256!=digest(read_json_model(directory/manifest.artifacts[key].path,model)):

@@ -125,6 +125,22 @@ class Segment(TimeSpan):
         return self
 
 
+class TranscriptCorrection(Contract):
+    original_transcript_sha256: Sha256
+    segment_id: Text
+    word_index: Annotated[int, Field(ge=0)]
+    start: float
+    end: float
+    before: Text
+    after: Text
+    evidence_media_sha256: Sha256
+    evidence_transcript_sha256: Sha256
+    evidence_segment_id: Text
+    evidence_quote: Text
+    evidence_model: Text
+    status: Literal['pending_review'] = 'pending_review'
+
+
 class TranscriptArtifact(Contract):
     schema_version: Literal["1"] = "1"
     source_sha256: Sha256
@@ -136,6 +152,14 @@ class TranscriptArtifact(Contract):
     timing: Literal["segment", "word"]
     timing_warnings: list[Literal["zero_duration_words_grouped"]] = Field(default_factory=list)
     segments: list[Segment] = Field(min_length=1)
+    corrections: list[TranscriptCorrection] = Field(default_factory=list)
+
+    @model_serializer(mode='wrap')
+    def preserve_asr_hashes(self, handler):
+        data = handler(self)
+        if not self.corrections:
+            data.pop('corrections', None)
+        return data
 
     @model_validator(mode="after")
     def transcript_bounds(self):
@@ -149,6 +173,17 @@ class TranscriptArtifact(Contract):
                 raise ValueError("word-timed segments must include words")
             ids.add(segment.segment_id)
             previous = segment.end
+        corrected = set()
+        by_id = {s.segment_id: s for s in self.segments}
+        for patch in self.corrections:
+            key = (patch.segment_id, patch.word_index)
+            segment = by_id.get(patch.segment_id)
+            if key in corrected or segment is None or patch.word_index >= len(segment.words):
+                raise ValueError('invalid correction target')
+            word = segment.words[patch.word_index]
+            if (word.word, word.start, word.end) != (patch.after, patch.start, patch.end):
+                raise ValueError('correction does not match delivered transcript')
+            corrected.add(key)
         return self
 
 
@@ -284,10 +319,13 @@ class StoryPlan(Contract):
     transcript_sha256: Sha256
     sequences: list[StorySequence] = Field(default_factory=list, max_length=100)
     approved: Literal[False] = False
+    review_only: bool = False
 
     @model_serializer(mode="wrap")
     def preserve_manual_hashes(self, handler):
         data = handler(self)
+        if not self.review_only:
+            data.pop("review_only", None)
         if not self.selection_binding:
             data.pop("selection_binding", None)
         return data
@@ -464,7 +502,7 @@ class RunManifest(Contract):
     run_id: RunId
     created_at: AwareDatetime
     updated_at: AwareDatetime
-    execution_kind: Literal["preparation", "fixture", "manual_render", "manual_stories", "topic_selection", "story_audit"]
+    execution_kind: Literal["preparation", "fixture", "manual_render", "manual_stories", "topic_selection", "story_audit", "source"]
     source: SourceInput
     stage: Stage = "configured"
     state: Literal["prepared", "running", "interrupted", "retryable", "checkpointed", "finished"] = "prepared"
@@ -481,11 +519,11 @@ class RunManifest(Contract):
                 len(set(self.input_artifact_keys)) != len(self.input_artifact_keys) or
                 not set(self.input_artifact_keys).issubset(self.artifacts)):
             raise ValueError("input artifact keys must be unique and present")
-        if self.state == "checkpointed" and not ((self.execution_kind in {"manual_render", "manual_stories"} and self.stage == "rendered") or (self.execution_kind == "topic_selection" and self.stage == "selected") or (self.execution_kind == "story_audit" and self.stage in {"audited", "reviewed"})):
+        if self.state == "checkpointed" and not ((self.execution_kind in {"manual_render", "manual_stories"} and self.stage == "rendered") or (self.execution_kind == "topic_selection" and self.stage == "selected") or (self.execution_kind == "story_audit" and self.stage in {"audited", "reviewed"}) or (self.execution_kind == "source" and self.stage == "transcribed")):
             raise ValueError("only manual rendered output can stop at an unaudited checkpoint")
         if self.story_progress and self.execution_kind != "manual_stories":
             raise ValueError("story progress/retryable checkpoints require a story run")
-        if self.state in {"interrupted", "retryable"} and self.execution_kind not in {"manual_stories", "topic_selection", "story_audit"}:
+        if self.state in {"interrupted", "retryable"} and self.execution_kind not in {"manual_stories", "topic_selection", "story_audit", "source"}:
             raise ValueError("retryable checkpoints require a story or selection run")
         if any(p.artifact_key not in self.artifacts for p in self.story_progress.values() if p.artifact_key):
             raise ValueError("story progress references a missing artifact")

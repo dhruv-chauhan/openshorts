@@ -46,6 +46,7 @@ class MediaInspection(Contract):
     transcript: TranscriptArtifact | None
     transcription: dict = Field(default_factory=dict)
     captions_text: str
+    word_disagreements: list[dict] = Field(default_factory=list)
 
 
 class ItemAudit(Contract):

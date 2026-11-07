@@ -41,6 +41,17 @@ def parser():
     source.add_argument("--fixture", type=Path, help="Explicitly synthetic contract fixture; never rendered")
     run.add_argument("--transcript", type=Path)
     run.add_argument("--prepare-only", action="store_true", help="Required for run; stops at configured")
+    acquire = commands.add_parser('source', help='Acquire and transcribe a source without rendering')
+    acquire.add_argument('--config', type=Path, required=True)
+    origin = acquire.add_mutually_exclusive_group(required=True)
+    origin.add_argument('--url')
+    origin.add_argument('--input', type=Path)
+    acquire.add_argument('--transcript', type=Path)
+    acquire.add_argument('--prepare-only', action='store_true')
+    seed = commands.add_parser('seed-source',help='Import verified cached YouTube media and provenance')
+    seed.add_argument('--config',type=Path,required=True)
+    seed.add_argument('--source-artifact',type=Path,required=True)
+    seed.add_argument('--media',type=Path,required=True)
     render = commands.add_parser("render", help="Render a manual span; output remains unaudited and unapproved")
     render.add_argument("--config", type=Path, required=True)
     source = render.add_mutually_exclusive_group(required=True)
@@ -51,7 +62,9 @@ def parser():
     render.add_argument("--end", type=float, required=True)
     stories = commands.add_parser("render-stories", help="Render a pinned manual plan as separate ordered stories")
     stories.add_argument("--config", type=Path, required=True)
-    stories.add_argument("--plan", type=Path, required=True)
+    story_input = stories.add_mutually_exclusive_group(required=True)
+    story_input.add_argument("--plan", type=Path)
+    story_input.add_argument('--review-selection-run-id', help='Render held proposals for inspection only; approval/publication is permanently blocked for this render')
     stories.add_argument("--transcript", type=Path)
     stories.add_argument("--prepare-only", action="store_true")
     stories.add_argument("--stop-after-stories", type=int, help="Pause after N newly completed stories")
@@ -60,6 +73,7 @@ def parser():
     select.add_argument("--source-artifact", type=Path, required=True)
     select.add_argument("--transcript", type=Path, required=True)
     select.add_argument("--prepare-only", action="store_true")
+    select.add_argument('--reuse-run-id', help='Reuse exact validated calls from a completed selection with identical model settings')
     audit = commands.add_parser("audit", help="Audit final story media independently and prepare human review")
     audit.add_argument("--config", type=Path, required=True)
     audit.add_argument("--render-workspace", type=Path, required=True)
@@ -71,6 +85,15 @@ def parser():
         command.add_argument("--workspace", type=Path, required=True)
         command.add_argument("--run-id", required=True)
         if name == "review": command.add_argument("--decisions", type=Path, required=True)
+    backup = commands.add_parser('backup', help='Back up a verified run to private Blob storage')
+    backup.add_argument('--workspace', type=Path, required=True)
+    backup.add_argument('--run-id', required=True)
+    backup.add_argument('--include-source', action='store_true')
+    backup.add_argument('--receipt', type=Path, required=True)
+    restore = commands.add_parser('restore', help='Restore a verified checkpoint to its canonical workspace')
+    restore.add_argument('--config',type=Path,required=True)
+    restore.add_argument('--receipt',type=Path,required=True)
+    restore.add_argument('--source-media',type=Path)
     for name in ("status", "resume"):
         command = commands.add_parser(name, help="Verify a saved run and its artifact checksums")
         command.add_argument("--workspace", type=Path, required=True)
@@ -82,6 +105,7 @@ def parser():
             modes.add_argument("--stories-only", action="store_true", help="Resume a pinned manual story plan")
             modes.add_argument("--selection-only", action="store_true", help="Resume topic selection with pinned inputs")
             modes.add_argument("--audit-only", action="store_true", help="Resume final-media auditing")
+            modes.add_argument('--source-only', action='store_true', help='Resume acquisition/transcription')
             command.add_argument("--media-only", action="store_true")
             command.add_argument("--stop-after-stories", type=int)
     return cli
@@ -97,6 +121,24 @@ def main(argv=None) -> int:
         from .foundry import FoundryError
         from .markets import MarketError
         from .storage import StorageError
+        if args.command == 'seed-source':
+            from .ingest import seed_source
+            from .artifacts import read_json_model
+            from .contracts import SourceArtifact
+            emit(seed_source(load_config(args.config),read_json_model(args.source_artifact,SourceArtifact),args.media))
+            return OK
+        if args.command == 'backup':
+            from .checkpoints import backup_run
+            from .artifacts import atomic_write,json_bytes
+            receipt=backup_run(args.workspace,args.run_id,include_source=args.include_source)
+            atomic_write(args.receipt,json_bytes(receipt))
+            emit(receipt)
+            return OK
+        if args.command == 'restore':
+            from .checkpoints import restore_run
+            manifest=restore_run(load_config(args.config),json.loads(args.receipt.read_text()),source_media=args.source_media)
+            emit({'run_id':manifest.run_id,'stage':manifest.stage,'state':manifest.state,'restored':True})
+            return OK
         if getattr(args, 'media_only', False) and (getattr(args, 'prepare_only', False) or
                 not (args.command == 'audit' or (args.command == 'resume' and args.audit_only))):
             raise ArtifactError('media-only requires audit execution')
@@ -124,11 +166,22 @@ def main(argv=None) -> int:
             return OK
         if (args.command in {"run", "resume"} and not args.prepare_only
                 and not getattr(args, "render_only", False) and not getattr(args, "stories_only", False)
-                and not getattr(args, "selection_only", False) and not getattr(args, "audit_only", False)):
+                and not getattr(args, "selection_only", False) and not getattr(args, "audit_only", False)
+                and not getattr(args, 'source_only', False)):
             emit({"error": "execution_not_implemented",
                   "message": "Use --prepare-only, render for an explicit span, or resume --render-only for a manual run."}, error=True)
             return UNAVAILABLE
-        if args.command == "audit":
+        if args.command == 'source':
+            from .source_runner import execute_source
+            source = SourceInput(kind='youtube',locator=args.url) if args.url else SourceInput(kind='local',locator=str(args.input))
+            manifest,directory = prepare_run(args.config,source,transcript_path=args.transcript,source_only=True)
+            if not args.prepare_only:
+                manifest = execute_source(directory.parent.parent,manifest.run_id)
+        elif args.command == 'resume' and args.source_only:
+            from .source_runner import execute_source
+            manifest = execute_source(args.workspace,args.run_id)
+            directory = args.workspace.resolve() / 'runs' / manifest.run_id
+        elif args.command == "audit":
             from .audit_runner import prepare_audit, execute_audit
             manifest, directory = prepare_audit(args.config, args.render_workspace, args.render_run_id)
             if not args.prepare_only:
@@ -147,7 +200,8 @@ def main(argv=None) -> int:
             directory = args.workspace.resolve() / "runs" / manifest.run_id
         elif args.command == "select":
             from .selection_runner import prepare_selection, execute_selection
-            manifest, directory = prepare_selection(args.config, args.source_artifact, args.transcript)
+            manifest, directory = prepare_selection(args.config, args.source_artifact, args.transcript,
+                                                    reuse_run_id=args.reuse_run_id)
             if not args.prepare_only:
                 manifest = execute_selection(directory.parent.parent, manifest.run_id)
         elif args.command == "resume" and args.selection_only:
@@ -156,7 +210,8 @@ def main(argv=None) -> int:
             directory = args.workspace.resolve() / "runs" / manifest.run_id
         elif args.command == "render-stories":
             from .execution import execute_stories
-            manifest, directory = prepare_run(args.config, transcript_path=args.transcript, story_plan_path=args.plan)
+            manifest, directory = prepare_run(args.config, transcript_path=args.transcript, story_plan_path=args.plan,
+                                              review_selection_run_id=args.review_selection_run_id)
             if not args.prepare_only:
                 manifest = execute_stories(directory.parent.parent, manifest.run_id, stop_after_stories=stop_after)
         elif args.command == "resume" and args.stories_only:
@@ -189,6 +244,8 @@ def main(argv=None) -> int:
               "execution_kind": manifest.execution_kind,
               "input_fingerprint": manifest.input_fingerprint,
               "approved": manifest.stage == "stored",
+              "source_artifact": str(directory / manifest.artifacts['source'].path) if 'source' in manifest.artifacts else None,
+              "transcript": str(directory / manifest.artifacts['transcript'].path) if 'transcript' in manifest.artifacts else None,
               "audit_bundle": str(directory / manifest.artifacts["audit_bundle"].path) if "audit_bundle" in manifest.artifacts else None,
               "review_template": str(directory / manifest.artifacts["review_template"].path) if "review_template" in manifest.artifacts else None,
               "story_plan": str(directory / manifest.artifacts["story_plan"].path) if "story_plan" in manifest.artifacts else None,
@@ -197,7 +254,8 @@ def main(argv=None) -> int:
               "sequence_index": str(directory / manifest.artifacts["sequence_index"].path) if "sequence_index" in manifest.artifacts else None,
               "preview": str(directory / manifest.artifacts["preview"].path) if "preview" in manifest.artifacts else None,
               "final_media": str(directory / manifest.artifacts["final_media"].path) if "final_media" in manifest.artifacts else None,
-              "message": ("Final-media audit/review run; only stored sequences are published." if manifest.execution_kind == "story_audit" else
+              "message": ("Source and transcript checkpoint; no selection or content approval." if manifest.execution_kind == 'source' else
+                          "Final-media audit/review run; only stored sequences are published." if manifest.execution_kind == "story_audit" else
                           "Topic selection only; no final-media audit or approval performed." if manifest.execution_kind == "topic_selection" else
                           "Supplied-plan render; no final-media audit or approval performed."
                           if manifest.execution_kind in {"manual_render", "manual_stories"} else
@@ -206,7 +264,13 @@ def main(argv=None) -> int:
             return NEEDS_REVIEW
         return OUTCOME_EXIT_CODES.get(manifest.outcome, OK)
     except FoundryError as exc:
-        emit(exc.public(), error=True)
+        error = exc.public()
+        # Preserve the failed run's identity so the worker can back it up and resume.
+        if locals().get('manifest') is not None and locals().get('directory') is not None:
+            error.update(run_id=manifest.run_id, manifest=str(directory/'manifest.json'), approved=False)
+            emit(error)
+        else:
+            emit(error, error=True)
         return FAILED
     except StorageError as exc:
         emit({"error": str(exc)}, error=True)

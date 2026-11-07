@@ -2,7 +2,7 @@
 
 Date: 2026-11-01  
 Repository baseline reviewed: `459716b`  
-Status: Phases A–D.1 are implemented and pushed on `clip-only-azure`; D.1 is `ea418ff`. Phase E is implemented locally: independent final-audio audits, hash-bound human review, and private Blob commit manifests. Reference content remains unapproved; the audit exercises the existing C.1 story clips without overriding withheld D/D.1 selections. Final sample acceptance and Azure worker/storage identity validation remain in Phase F. See the [clip-only runbook](../clip-only-runbook.md) for commands and limitations.
+Status: Phases A–D.1 are implemented and pushed on `clip-only-azure`; D.1 is `ea418ff`. Phase E is committed and pushed as `764f169`: independent final-audio audits, hash-bound human review, and private Blob commit manifests. Reference content remains unapproved; the audit exercises the existing C.1 story clips without overriding withheld D/D.1 selections. Phase F is complete as an accepted implementation milestone: Azure execution, checkpoint recovery and telemetry are validated; the user accepted the delivered sample clips and caption correction on 2026-11-07. Existing audit findings remain preserved and do not imply publication approval. Sequence-context policy refinement and broader source evaluation follow in the next iteration. See the [clip-only runbook](../clip-only-runbook.md) for commands and limitations.
 
 ## 1. Outcome and scope
 
@@ -749,7 +749,7 @@ a delivery guarantee; complete profile coverage of all 120 markets is not a D.1 
 
 Exit: no unreviewed/rejected/failed story or sequence enters the approved index. Changing final bytes, order, membership or displayed metadata invalidates the corresponding approval. Upload interruption/retry cannot publish an incomplete sequence. Audit failure cannot become `completed_no_matches`.
 
-Implemented locally in Phase E:
+Implemented and pushed in Phase E:
 
 - `audit_contracts.py`, `audit_media.py`, `audit.py` and `audit_runner.py` import a verified render into an immutable audit run, inspect delivered files, independently transcribe final audio, and separately audit every story and its ordered sequence. Source context includes omitted intervals; selected-source evidence excludes words outside the actual cut. Adjacent karaoke highlight events are collapsed into timed visible caption text for semantic comparison. Independent ASR defaults to `small`; a stronger model can be configured without changing source ASR.
 - `review.py` creates pending reviewer packets and validates explicit human decisions against the audit, story and sequence hashes. Every approved item requires full playback, every review issue requires evidence, and hard failures cannot be overridden. Changing metadata or resolving an issue by editing media requires another render/audit/review; review notes do not modify displayed content.
@@ -769,6 +769,154 @@ The live auditor remains conservative and imperfect: it can overflag unknown spe
 4. Use stage reruns to avoid repeated downloads/transcription and preserve before/after reports.
 
 Exit: the user accepts the actual sample clips; all technical gates pass; repeat/restart behavior is demonstrated; known limitations and effective configuration are recorded. Do not claim general channel-level precision or throughput from this single-video result.
+
+Phase F implementation (after E commit `764f169`; sample accepted 2026-11-07):
+
+- `infra/clip-worker/` provisions the CPU worker, persistent scratch/model cache, ACR,
+  private run/approved containers and managed identity. A separate Monitor template
+  accepts scalar per-job measurements. The operator runs one immutable image digest
+  and one explicit job at a time through Run Command; no channel scheduler or public
+  API is introduced. See its [deployment/recovery guide](../../infra/clip-worker/README.md).
+- `source_runner.py` adds a source-only acquisition/transcription checkpoint. `source`
+  and `resume --source-only` avoid throwaway renders. `seed-source` verifies exact
+  cached media while retaining YouTube origin, publication and permission provenance.
+- `checkpoints.py` and CLI `backup`/`restore` verify Blob bytes, commit the checkpoint
+  marker last and restore the exact manifest at its canonical workspace. Restore
+  refuses to overwrite a run. Source media may be explicitly included or supplied
+  separately by exact hash. These checkpoints never imply content approval.
+- `worker_job.py` records elapsed/CPU time, child peak RSS, free disk, source/output
+  seconds and cumulative recorded model usage. Jobs bind their IDs to input JSON;
+  repeats reuse results, and stage retries use a new job ID with the existing run.
+  Review/promotion remain explicit operator actions outside this worker command set.
+- Sample transcription uses `medium` for source and the latest independent final-audio ASR;
+  the earlier `small` audit is preserved for comparison.
+  Rebuild captions from the stronger source transcript, preserving original source
+  timing and playback-rate transforms. Do not silently edit material figures or
+  retime old tiny-model boundaries to make an audit pass.
+- Ticker-only lexical aliases preserve case so ordinary words such as “be” and “now”
+  do not become company hints for `BE`/`NOW`. Full company names remain case
+  insensitive; lexical presence still does not establish semantic relevance.
+- Display metadata omits unknown optional speaker/timeframe/subject and unclear
+  stance. Internal uncertainty remains recorded. Final-audit prompt v3, pre-render check v11 and policy v4
+  distinguish absent tags from false assertions, attributed uncertainty from altered
+  numbers, relative dates from false currentness, and unlisted supporting companies
+  from actual entity ambiguity. All real mismatches remain review/rejection reasons.
+- Live synthetic calibration checks faithful uncertain reports, anonymous opinion,
+  supporting unlisted companies, altered caption numbers, omitted qualifications,
+  invented stance and ambiguous final-audio numbers. Seven cases meet their expected
+  decisions; these are calibration examples, not a holdout accuracy estimate.
+
+Verified in the deployed CPU worker: no Google SDK, account-scoped managed-identity
+Foundry inference (Cognitive Services audience), private Blob upload/download/retry,
+stronger source ASR, scalar Monitor ingestion, exact checkpoint restoration from Blob,
+unchanged source resume and a VM restart. The live cloud YouTube request hit a bot
+challenge; the sample used exact previously acquired bytes with preserved provenance.
+A permitted production acquisition path remains necessary before channel automation.
+
+The original context-window review has now been resolved in a live, independent
+verification using exact local and adjacent source quotes. Initial/effective decisions
+and both model responses remain in the report. Missing coverage, invalid evidence,
+budget failure or verifier disagreement preserve the hold; context does not create
+in-window direct market IDs. Medium source ASR recognizes the previously garbled company
+name without lexical substitution or rewriting the old transcript.
+
+Additional safeguards keep required draft context IDs inside the proposed span, restrict
+association evidence to in-story segments, and give the pre-render checker the exact
+public metadata. Compatible-response reuse pins the parent manifest, requires identical
+Foundry settings and revalidates every exact request match. It never reuses a prior gate
+outcome. Tests cover these boundaries and stale-parent refusal.
+
+The current sequence still receives a numeric-policy review despite preserving the
+reported figures and qualifications. Its automatic plan remains empty. F adds explicit
+review-only rendering of held proposals for media inspection: `review_render.py` binds
+the original report, validates spans/budgets and sets a permanent quarantine marker.
+Both story and sequence audits carry a deterministic selection-hold rejection, even if
+the semantic auditor passes. Human approval and publication cannot override it. This
+is a diagnostic extension, not relaxation of normal candidate release or approval.
+
+Historical findings before the final refinement and sample acceptance:
+
+1. Resolve the still-held numeric selection finding using the new final-media evidence.
+   The initial final-media audit passes numeric/caveat preservation but rejects
+   overstrong directional associations and a GPU-demand mechanism not established by
+   the spoken argument. Keep these as rejections; do not tune the auditor to ignore them.
+2. Refine caption size/placement and inspect the remaining ASR vocabulary differences.
+   Sampled frames confirm the corrected company spelling but show oversized inherited
+   captions that can overlap the broadcaster footer. The stronger final-audio ASR
+   comparison completed as a separate pinned audit and correctly recognizes the company
+   name. A remaining caption-vocabulary disagreement is recorded in supplemental
+   inspection notes because the semantic model did not flag it. The earlier audit
+   remains available.
+3. Create a new normal selection/render/audit after resolving findings. Do not remove
+   a quarantine marker or patch old artifacts. Inspect full playback and obtain the
+   user's explicit sample acceptance.
+
+The separate reference stories have been rendered on the CPU worker, backed up,
+exported with hash verification and checked for exact vertical geometry and stream
+formats. Independent final-audio/sequence audits completed, and a repeated render resume
+returned an identical checkpoint without rendering again. Sampled-frame inspection is
+recorded separately from full playback acceptance.
+
+The sample remains unapproved. Infrastructure checks, unit tests, synthetic calibration
+and diagnostic rendering do not satisfy F's exit criteria. The worker is deallocated
+between iterations; retained storage/disks/ACR remain available and billable.
+
+
+F refinement implementation adds `captions.py`, `caption_audit.py` and `corrections.py`.
+Public category metadata no longer exposes unvalidated classification mechanisms;
+association proposals receive an independent verification pass with immutable history.
+The final auditor distinguishes editorial exposure from attributed speaker stance.
+An optional pixel-based caption profile places measured, sentence-case phrases below
+full-width footage, failing explicitly if safe space is unavailable. Evidence-bound
+transcript corrections create new artifacts and retain human-review requirements.
+Caption/audio lexical disagreements now create deterministic review issues even when
+the semantic model misses them. See the runbook for configuration and correction CLI.
+Reference regeneration and fresh audits use new runs; previous render/selection/audit
+packets remain unchanged for comparison. These refinements do not waive prior holds or
+constitute sample acceptance.
+
+Refinement validation has now completed on the reference: fresh selection, separate
+rendering, medium-model final-audio ASR and story/sequence audits. Measured captions
+clear the source footer in sampled frames, and independent audio ASR agrees with the
+proposed lexical correction. The audit still rejects an over-specific exposure claim
+on one story and retains caption/audio disagreement reviews. The correction itself
+remains pending human confirmation. Targeted synthetic auditor calibration passes
+after distinguishing operating exposure from stock returns and correcting a fixture's
+unsupported category. Retain the live rejection and earlier calibration responses as
+evaluation evidence; do not count synthetic passes or sequence-level passes as release
+approval. Full playback acceptance and resolution of the actual findings remain F exit
+requirements. No prior artifacts or human-review gates were replaced.
+
+
+### F acceptance and follow-up evaluation
+
+On 2026-11-07 the user accepted the delivered sample clips, judged the caption
+presentation suitable and confirmed the proposed lexical correction. Phase F is
+closed as an implementation and sample-quality milestone with the known audit
+limitations accepted for further iteration. This acceptance supersedes the pending
+sample-acceptance statements in the historical validation notes above. It does not
+rewrite old transcripts, correction provenance, audit results or publication state.
+The private acceptance record binds the user's decision to the exact render and audit
+artifacts. No blanket issue resolutions or publication approval are inferred.
+
+The user also set the direction for the next policy iteration: an individual story
+may leave exposure ambiguous when later stories in its delivered sequence clarify
+it. Implement and evaluate this as sequence-dependent context, with explicit
+references to the later supporting spans, preserved ordering and a distinction
+between an unresolved spoken discussion and an asserted company-specific metadata
+claim. Missing future stories cannot supply evidence; a market tag or mechanism
+must not present an unresolved inference as established fact. Essential qualifications
+must remain attached to their claims. Test incomplete sequences, early viewer exits
+and reordered stories before changing the current standalone audit policy.
+
+This sequence-dependent exception is a follow-up policy change, not an implemented
+waiver in the current auditor. The latest reference plan groups its stories into
+separate sequence manifests, so source chronology alone does not establish such a
+cross-story dependency. Preserve the existing rejection and review results as
+calibration cases. Next, evaluate multiple source videos for context preservation,
+exposure precision, caption/audio variants and visual consistency; refine the policy
+and models using that broader evidence. The present single sample does not establish
+general accuracy or throughput.
 
 ## 12. Verification plan
 

@@ -30,6 +30,7 @@ def validate_review(manifest,bundle,review,plan):
         resolved={r.issue_id for r in item.resolutions}
         if len(resolved)!=len(item.resolutions) or not resolved.issubset(issues):raise ArtifactError('invalid issue resolution')
         if item.decision=='approve':
+            if plan.review_only:raise ArtifactError('review-only renders cannot be approved; resolve selection and create a new render')
             if not item.watched_entire_item:raise ArtifactError('full visual/audio review required')
             if audit.decision=='reject':raise ArtifactError('hard audit failure cannot be overridden')
             if resolved!={i.issue_id for i in issues.values() if i.severity=='review'}:

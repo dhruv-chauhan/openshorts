@@ -68,8 +68,15 @@ def spoken_market_ids(text, markets):
                               '', name, flags=re.I).strip()
             if stripped:
                 yield stripped
+    def mentioned(market, name):
+        # Ticker aliases can be ordinary speech (BE, NOW, ON). Case-folding those
+        # manufactures company hints from verbs/adverbs. Full names remain case
+        # insensitive; exact uppercase symbols are still only lexical hints.
+        ticker = market.market_id.rsplit(':', 1)[-1]
+        flags = 0 if name == ticker and name.isupper() else re.I
+        return re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, flags)
     return [market.market_id for market in markets.markets if market.enabled and any(
-        re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, re.I) for name in names(market))]
+        mentioned(market, name) for name in names(market))]
 
 
 def boundary_reviews(story, transcript):
@@ -113,6 +120,20 @@ def _story_spec(story):
     return StorySpec.model_validate({key: getattr(story, key) for key in StorySpec.model_fields})
 
 
+def check_presentation(response):
+    """Check delivered claims, not proposal-only freshness/routing labels."""
+    from .audit import display_metadata
+    proposals = response.model_dump()
+    displayed = {}
+    for source, target in zip(response.sequences, proposals['sequences']):
+        specs = [_story_spec(story) for story in source.stories]
+        # Keep rejected hypotheses and verifier history out of the public-copy check.
+        # Supported exposure is supplied explicitly in displayed_metadata below.
+        target['stories'] = [story.model_dump(exclude={'enrichment'}) for story in specs]
+        displayed.update({story.story_id: display_metadata(story) for story in specs})
+    return {'proposals': proposals, 'displayed_metadata': displayed}
+
+
 def _plan(source, transcript, sequences):
     return StoryPlan(source=source.origin, source_sha256=source.media_sha256,
                      transcript_sha256=digest(transcript), sequences=sequences)
@@ -138,6 +159,9 @@ def resolve_drafts(response, segments):
             if last < first or not set(story.evidence_segment_ids).issubset(
                     {s.segment_id for s in segments[first:last+1]}):
                 raise ValueError('evidence/boundaries do not belong to the story')
+            if not set(story.context_segment_ids).issubset(
+                    {s.segment_id for s in segments[first:last+1]}):
+                raise ValueError('required context must be inside the story boundaries')
             # ASR segments are not sentence boundaries. Expand only within the
             # complete region, then run the same overlap, duration and semantic checks.
             terminal = lambda word: word.rstrip('"\'”’)]}').endswith(('.', '?', '!'))
@@ -229,6 +253,12 @@ def select_stories(config, source, transcript, policy, markets, call, *, knowled
         by_id = {w.window_id: w for w in response.windows}
         decisions.extend(by_id[w['window_id']] for w in batch['items'])
     assert len(decisions) == len(windows)
+    initial_decisions = list(decisions)
+    context_resolutions = []
+    if coverage_complete and any(w.decision == 'review' for w in decisions):
+        from .context_resolution import resolve_context
+        decisions, context_resolutions = resolve_context(windows, decisions, transcript, markets,
+            shared, prompt_set, call, enriched=enriched)
     regions = regions_for(windows, decisions) if coverage_complete else []
     review_reasons = [f'{w.window_id}: {w.reason}' for w in decisions if w.decision == 'review']
     proposals, checks, accepted, withheld, boundary_flags = [], [], [], [], []
@@ -319,7 +349,7 @@ def select_stories(config, source, transcript, policy, markets, call, *, knowled
                     if len(rules) != len(rule_ids) or {r.rule_id for r in rules} != rule_ids:
                         raise ValueError('incomplete policy rule checks')
         try:
-            checked = call('selection', prompt_set['check'], {**payload, 'proposals': response.model_dump()},
+            checked = call('selection', prompt_set['check'], {**payload, **check_presentation(response)},
                            SelectionReview, validate_checks)
         except FoundryError as exc:
             if exc.code != 'context_budget_exceeded':
@@ -378,6 +408,8 @@ def select_stories(config, source, transcript, policy, markets, call, *, knowled
     validate_plan_transcript(plan, source, transcript, config)
     report = {'schema_version': '1', 'prompt_version': prompt_set['version'], 'approved': False,
               'audit_performed': False, 'windows': [d.model_dump() for d in decisions],
+              'initial_windows': [d.model_dump() for d in initial_decisions],
+              'context_resolutions': context_resolutions,
               'coverage_complete': coverage_complete, 'regions': regions, 'proposals': proposals, 'checks': checks,
               'ranking': ranking.model_dump() if ranking else None, 'withheld': withheld,
               'boundary_reviews': boundary_flags,

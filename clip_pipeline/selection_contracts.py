@@ -73,7 +73,7 @@ class StoryDraft(Contract):
     first_segment_id: Text
     last_segment_id: Text
     evidence_segment_ids: list[Text] = Field(min_length=1)
-    context_segment_ids: list[Text]
+    context_segment_ids: list[Text] = Field(description="Required dependencies, all inside the selected first/last segment range. Extend the contiguous story to include its subject and qualifications; never place a necessary caveat outside the cut.")
     role: Literal['context', 'claim', 'explanation', 'evidence', 'qualification', 'conclusion']
     attribution: AttributedStance | None = Field(description="Null if the speaker or price direction is unknown. Descriptive facts without a price view do not imply neutral stance.")
     topic_path: TopicPath
@@ -129,6 +129,33 @@ class EnrichedWindowDecision(WindowDecision):
 
 class EnrichedRelevanceResponse(Contract):
     windows: list[EnrichedWindowDecision]
+
+
+class ContextWindowDecision(WindowDecision):
+    context_evidence: list[Evidence] = Field(description="Exact quotes from the reconstructed discussion that resolve the original uncertainty; include an adjacent segment outside the reviewed window for a resolved decision.")
+
+
+class ContextResolution(Contract):
+    windows: list[ContextWindowDecision]
+
+
+class EnrichedContextWindowDecision(ContextWindowDecision):
+    topic_path: Literal['allowed_market', 'equity_macro', 'market_exposure'] | None
+
+
+class EnrichedContextResolution(Contract):
+    windows: list[EnrichedContextWindowDecision]
+
+
+class ContextResolutionCheck(Contract):
+    window_id: Text
+    verdict: Literal['confirmed', 'unresolved']
+    evidence: list[Evidence] = Field(min_length=1)
+    reason: Text
+
+
+class ContextResolutionReview(Contract):
+    windows: list[ContextResolutionCheck]
 
 
 class EnrichedStoryDraft(StoryDraft):

@@ -63,5 +63,16 @@ def inspect_media(media, artifact, config, render_root):
     # Never supply or crop the source transcript here. Cache identity includes final bytes and ASR settings.
     transcript, transcription=transcribe(final_source,media,audit_config)
     checks['final_audio_transcribed']=True
+    from .caption_audit import disagreements
+    differences = disagreements(captions, transcript) if captions else []
+    if differences:
+        issues.append(AuditIssue(issue_id='caption_audio_disagreement', rule_id='caption_audio_fidelity',
+            severity='review', kind='asr_uncertainty', source_segment_ids=[],
+            final_segment_ids=list(dict.fromkeys(s for d in differences for s in d['final_segment_ids'])),
+            explanation='Lexical caption/final-audio ASR differences require listening; ASR disagreement is not proof '
+                        'of a caption error. Full differences are in the inspection artifact: ' +
+                        '; '.join(f"{d['caption']!r} vs {d['final_asr']!r}" for d in differences[:20])))
+    checks['caption_audio_words_agree'] = not differences
     return MediaInspection(story_id=artifact.story.story_id,final_sha256=artifact.final.media.sha256,
-        checks=checks,issues=issues,transcript=transcript,transcription=transcription,captions_text=captions)
+        checks=checks,issues=issues,transcript=transcript,transcription=transcription,captions_text=captions,
+        word_disagreements=differences)

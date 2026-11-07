@@ -311,3 +311,24 @@ def test_failed_exposure_does_not_hide_source_policy_uncertainty(media_case):
         return result
     plan,report=select_stories(config,source,transcript,policy,markets,call,knowledge=k,assessed_on=DAY)
     assert not plan.sequences and report['outcome']=='needs_review'
+
+
+def test_association_payload_cannot_leak_external_context(media_case):
+    from clip_pipeline.selection import resolve_drafts
+    config,source,transcript,policy,markets,k=inputs(media_case)
+    base,_=evaluator(transcript,policy)
+    raw=base('selection','',{},EnrichedDraftResponse,lambda _:None)
+    story=resolve_drafts(raw,transcript.segments).sequences[0].stories[0]
+    from clip_pipeline.contracts import Evidence
+    external=Evidence(segment_id='outside',start=100.0,end=101.0,quote='External context is not spoken here.')
+    story=story.model_copy(update={'context':[external]})
+    observed=[]
+    def call(stage,system,payload,model,validate):
+        if model in (DiscussionClassification,AssociationResponse):
+            observed.append(model)
+            assert 'context' not in payload['story']
+            assert 'outside' not in payload['allowed_evidence_segment_ids']
+            assert set(payload['allowed_evidence_segment_ids'])=={s.segment_id for s in transcript.segments}
+        return base(stage,system,payload,model,validate)
+    enrich_story(story,transcript,k,markets,config.enrichment,call,assessed_on=DAY)
+    assert observed==[DiscussionClassification,AssociationResponse,AssociationResponse]

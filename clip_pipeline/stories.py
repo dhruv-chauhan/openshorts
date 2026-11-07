@@ -112,6 +112,8 @@ def validate_story_checkpoint(manifest, directory, config):
     if "story_plan" not in (manifest.input_artifact_keys or []):
         raise ArtifactError("story plan is not a pinned input")
     plan = read_json_model(directory / manifest.artifacts["story_plan"].path, StoryPlan)
+    from .review_render import validate_review_binding
+    validate_review_binding(plan, manifest, directory)
     validate_plan_config(plan, config)
     if 'enrichment' in plan.selection_binding:
         from .enrichment_contracts import KnowledgeSnapshot

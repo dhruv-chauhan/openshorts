@@ -56,22 +56,35 @@ def render_one_clip(media_path: Path, source, transcript, request, config,
     final = clean
     files = {"clean_media": clean, "layout_ranges": directory / "layout-ranges.json"}
     captions_ref = None
+    caption_layout = None
     if config.media.captions:
         ass, srt = directory / "captions.ass", directory / "captions.srt"
         legacy = story_transcript(transcript, request) if is_story else legacy_transcript(transcript)
         caption_start, caption_end = (0.0, duration) if is_story else (span.start, span.end)
         style = subtitles.AUTO_CAPTION_STYLE
-        if not subtitles.generate_ass(legacy, caption_start, caption_end, str(ass),
-                split_ranges=layout_ranges.split_ranges(ranges),
-                max_chars=style["max_chars"], max_duration=style["max_duration"],
-                alignment=style["alignment"], fontsize=style["font_size"],
-                font_name=style["font_name"], font_color=style["font_color"],
-                border_color=style["border_color"], border_width=style["border_width"],
-                highlight_color=style["highlight_color"], effect=style["effect"],
-                base_opacity=style["base_opacity"], uppercase=style["uppercase"]):
-            raise MediaError("no_caption_words_in_span")
-        subtitles.generate_srt(legacy, caption_start, caption_end, str(srt),
-                               max_chars=style["max_chars"], max_duration=style["max_duration"])
+        if config.media.caption_style is not None:
+            if config.media.layout != 'preserve_full_width':
+                raise MediaError('caption_safe_area_requires_full_width')
+            from .captions import generate
+            # Coordinates follow the delivered picture, not a guessed footer height.
+            local = legacy if is_story else {'segments': [
+                {'words': [{**w, 'start': w['start']-span.start, 'end': w['end']-span.start}
+                           for w in s['words'] if w['start'] >= span.start and w['end'] <= span.end]}
+                for s in legacy['segments']]}
+            caption_layout = generate(local, config.media.caption_style,
+                                      original['width'], original['height'], ass, srt)
+        else:
+            if not subtitles.generate_ass(legacy, caption_start, caption_end, str(ass),
+                    split_ranges=layout_ranges.split_ranges(ranges),
+                    max_chars=style["max_chars"], max_duration=style["max_duration"],
+                    alignment=style["alignment"], fontsize=style["font_size"],
+                    font_name=style["font_name"], font_color=style["font_color"],
+                    border_color=style["border_color"], border_width=style["border_width"],
+                    highlight_color=style["highlight_color"], effect=style["effect"],
+                    base_opacity=style["base_opacity"], uppercase=style["uppercase"]):
+                raise MediaError("no_caption_words_in_span")
+            subtitles.generate_srt(legacy, caption_start, caption_end, str(srt),
+                                   max_chars=style["max_chars"], max_duration=style["max_duration"])
         final = directory / "captioned.mp4"
         subtitles.burn_subtitles(str(clean), str(ass), str(final),
             alignment=style["alignment"], fontsize=style["font_size"], font_name=style["font_name"],
@@ -91,6 +104,7 @@ def render_one_clip(media_path: Path, source, transcript, request, config,
                                     for w in s.words for boundary in (span.start, span.end)),
         "transcript_timing_warnings": transcript.timing_warnings,
         "layout": config.media.layout, "captions": config.media.captions,
+        "caption_layout": caption_layout,
         "final_media": result.media.model_dump(), "media_checks": info,
     }))
     files.update(final_media=final, final=directory / "final.json", render_report=directory / "render-report.json")

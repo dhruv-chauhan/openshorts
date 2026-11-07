@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "version": "market-policy-v3-contextual-audit",
+  "version": "market-policy-v4-evidence-calibration",
   "allowed_market_description": "Substantive views, news, updates, analysis, explanation, education or advice about an enabled market's underlying asset or company. A passing mention does not qualify.",
   "equity_macro_description": "Explain a direct equity-market connection through corporate economics, earnings, borrowing costs, discount rates, inflation, demand, investor sentiment, liquidity or capital flows. A specific ticker is optional; do not invent a connection absent from the content.",
   "rules": [
@@ -28,7 +28,7 @@
     {
       "rule_id": "faithful_attribution",
       "severity": "reject",
-      "instruction": "Opinions and advice are eligible. Preserve attribution and uncertainty; do not reject a view merely because the model disagrees."
+      "instruction": "Opinions and advice are eligible. Preserve attribution and uncertainty; do not reject a view merely because the model disagrees. First-person 'I' does not identify a speaker by name. An unknown speaker is allowed; do not demand or invent a name when none is established."
     },
     {
       "rule_id": "grounded_copy",
@@ -38,12 +38,12 @@
     {
       "rule_id": "material_numbers",
       "severity": "review",
-      "instruction": "Preserve numeric meaning, units, attribution and caveats. Unintelligible numbers, unclear reference assets, ASR disagreement or lost qualifications require review/rejection as appropriate. An intelligible attributed report with its explicit uncertainty intact does not require external truth verification solely because the speaker cannot independently confirm it."
+      "instruction": "Preserve numeric meaning, units, attribution and caveats. Unintelligible numbers, unclear reference assets, ASR disagreement or lost qualifications require review/rejection as appropriate. An intelligible attributed report with its explicit uncertainty intact does not require external truth verification solely because the speaker cannot independently confirm it. When source ASR, independent final-audio ASR and captions agree and the original caveat is retained, numeric content alone is not a reason for review. Identify a concrete discrepancy or intelligibility problem."
     },
     {
       "rule_id": "freshness",
       "severity": "review",
-      "instruction": "Preserve the temporal framing actually established by the source. Historical years/quarters can be sufficient; do not require an exact calendar day unless that precision changes meaning or is necessary for a time-sensitive inferred association. Do not present old news or predictions as current, or invent event dates from publication dates."
+      "instruction": "Preserve the temporal framing actually established by the source. Historical years/quarters can be sufficient; do not require an exact calendar day unless that precision changes meaning or is necessary for a time-sensitive inferred association. Do not present old news or predictions as current, or invent event dates from publication dates. Missing year/day alone is not a failure when relative quarter wording is preserved and no unsupported currentness or event date is asserted. Source publication metadata provides provenance, not a substituted event date."
     },
     {
       "rule_id": "distinct_moment",
@@ -75,7 +75,7 @@
     {
       "rule_id": "stance_attribution",
       "severity": "reject",
-      "instruction": "Record subject, attributed speaker and timeframe when known. Use unclear for absent price direction; business criticism alone is not bearish. Preserve mixed views and do not invent consensus.",
+      "instruction": "Record subject, attributed speaker and timeframe when known. Use unclear for absent price direction; business criticism alone is not bearish. Preserve mixed views and do not invent consensus. Null/absent speaker, timeframe or stance and unclear stance assert no metadata claim; do not reject or request optional tags solely because they are missing. A supplied incorrect tag remains a violation.",
       "positive_examples": [
         "Operational criticism without a price forecast has unclear stance."
       ],
@@ -86,7 +86,7 @@
     {
       "rule_id": "entity_disambiguation",
       "severity": "review",
-      "instruction": "Resolve common-word aliases from business context. Use only enabled underlying IDs; do not infer index membership or corporate relationships. Unresolved identity requires review.",
+      "instruction": "Resolve common-word aliases from business context. Use only enabled underlying IDs; do not infer index membership or corporate relationships. Unresolved identity requires review. A clearly identified unlisted supporting company may remain in an otherwise eligible discussion without an invented ID or identity-review requirement.",
       "positive_examples": [
         "An earnings discussion identifies Apple as the technology company."
       ],

@@ -107,7 +107,7 @@ def test_blob_existing_bytes_verified_and_public_container_refused(config_data):
     class Container:
         public=None
         def create_container(self):raise ResourceExistsError('exists')
-        def get_container_access_policy(self):return {'public_access':self.public}
+        def get_container_properties(self):return {'public_access':self.public}
     blob=Blob();container=Container()
     sink=BlobSink(config,client=SimpleNamespace(get_blob_client=lambda *a:blob,get_container_client=lambda *a:container))
     sink.ensure_private('approved')

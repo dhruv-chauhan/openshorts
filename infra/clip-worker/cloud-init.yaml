@@ -1,0 +1,29 @@
+#cloud-config
+package_update: true
+packages: [docker.io, ca-certificates, curl, gnupg]
+write_files:
+  - path: /usr/local/sbin/clip-mount-data
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      device=/dev/disk/azure/scsi1/lun0
+      for attempt in $(seq 1 60); do
+        test -b "$device" && break
+        sleep 2
+      done
+      test -b "$device"
+      # Format only a new blank disk. Never reformat an attached checkpoint disk.
+      if ! blkid "$device" >/dev/null 2>&1; then mkfs.ext4 -F "$device"; fi
+      test "$(blkid -s TYPE -o value "$device")" = ext4
+      mkdir -p /srv/clip
+      uuid=$(blkid -s UUID -o value "$device")
+      grep -q "UUID=$uuid " /etc/fstab || echo "UUID=$uuid /srv/clip ext4 defaults,nofail 0 2" >> /etc/fstab
+      mountpoint -q /srv/clip || mount /srv/clip
+      chmod 700 /srv/clip
+      mkdir -p /srv/clip/jobs /srv/clip/models /srv/clip/workspace
+runcmd:
+  - [systemctl, enable, --now, docker]
+  - [/usr/local/sbin/clip-mount-data]
+  - [bash, -c, 'install -m 0755 -d /etc/apt/keyrings; curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/keyrings/microsoft.gpg; chmod a+r /etc/apt/keyrings/microsoft.gpg']
+  - [bash, -c, 'echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ noble main" > /etc/apt/sources.list.d/azure-cli.list; apt-get update; apt-get install -y azure-cli']

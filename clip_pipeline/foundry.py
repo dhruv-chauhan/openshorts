@@ -274,6 +274,7 @@ class FoundryBackend:
                 request["reasoning_effort"] = settings.reasoning_effort
             started, response, error, cause = time.monotonic(), None, None, None
             request_id = None
+            repair_hint = ''
             try:
                 raw_response = self._client.chat.completions.with_raw_response.create(**request)
                 request_id = (raw_response.headers.get("x-request-id") or
@@ -295,7 +296,8 @@ class FoundryBackend:
                     result = response_model.model_validate_json(raw, strict=True)
                     if validate:
                         validate(result)
-                except (ValueError, TypeError, SchemaError, ValidationError):
+                except (ValueError, TypeError, SchemaError, ValidationError) as exc:
+                    repair_hint = safe_repair_hint(exc)
                     raise FoundryError("invalid_response") from None
             except FoundryError as exc:
                 error = exc
@@ -315,10 +317,27 @@ class FoundryBackend:
                     repaired = True
                     # No echoed invalid output or untrusted validation text in system prompt.
                     messages[0] = {**messages[0], "content": messages[0]["content"] +
-                                   "\nThe previous response failed validation. Re-evaluate all supplied items and satisfy every schema and policy requirement."}
+                                   "\nThe previous response failed validation. Re-evaluate all supplied items and satisfy every schema and policy requirement." + repair_hint}
                     continue
             raise error from None
         raise AssertionError("unreachable")
+
+
+def safe_repair_hint(error):
+    """Only fixed developer-authored hints; never echo rejected source/model text."""
+    hints = {
+        'stories must be chronological and nonoverlapping':
+            ' All proposed stories must be chronological and disjoint. Do not propose alternative cuts of the same passage. Combine shared context into one story.',
+        'source spans may not overlap across sequences':
+            ' Source spans must be disjoint across ALL sequences, not just within each sequence. Do not output overlapping alternatives.',
+        'one omission reason is required for each story pair':
+            ' For each sequence with N stories, omission_reasons must have exactly N-1 strings. Include an entry even for adjacent stories with no skipped speech.',
+        'required context must be inside the story boundaries':
+            ' Expand first/last segment boundaries to include every required context_segment_id. Do not omit a required qualification to satisfy this constraint.',
+        'association evidence outside story':
+            ' Evidence IDs must be unique members of allowed_evidence_segment_ids for this story.'}
+    text = str(error)
+    return next((hint for message,hint in hints.items() if message in text), '')
 
 
 def _classify(exc) -> FoundryError:

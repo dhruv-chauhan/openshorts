@@ -49,6 +49,8 @@ def story_preview(plan, sequences):
 <p>SHA-256: <code>{artifact.final.media.sha256}</code></p><nav>{' · '.join(navigation)}</nav></article>''')
         sections.append(f'<section><h2>{escape(sequence.sequence.title)}</h2><nav>{links}</nav>{"".join(cards)}</section>')
     body = ''.join(sections) or '<p>The manual plan contains no sequences. No relevance decision was made.</p>'
+    if plan.review_only:
+        body = '<p class="warning">REVIEW-ONLY RENDER: selection remains withheld. This render cannot be approved or published. Resolve selection and render a new plan.</p>' + body
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Unaudited story preview</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; media-src 'self' file:; style-src 'unsafe-inline'">
@@ -59,6 +61,7 @@ def story_preview(plan, sequences):
 
 def selection_preview(plan, report, transcript):
     """Text-first editorial review, including withheld proposals and source gaps."""
+    import json
     accepted = {s.sequence_id for s in plan.sequences}
     sections = []
     for region in report['proposals']:
@@ -76,12 +79,18 @@ def selection_preview(plan, report, transcript):
             state = 'Selected for unaudited rendering' if sequence['sequence_id'] in accepted else 'Withheld — inspect selection report'
             sections.append(f"<section><h2>{escape(sequence['title'])}</h2><p>{state}</p>{''.join(cards)}<ul>{gaps}</ul></section>")
     reasons = ''.join(f'<li>{escape(r)}</li>' for r in report['review_reasons'])
+    context = ''
+    if report.get('context_resolutions'):
+        history = {'initial_reviewed_windows': [w for w in report.get('initial_windows', []) if w['decision']=='review'],
+                   'resolutions_and_independent_checks': report['context_resolutions']}
+        context = ('<details><summary>Context review evidence and independent checks</summary><pre style="white-space:pre-wrap">'
+                   + escape(json.dumps(history,indent=2,ensure_ascii=False)) + '</pre></details>')
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Selection review</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <style>body{{font:17px system-ui;max-width:900px;margin:30px auto;padding:20px;line-height:1.6}}section{{border-top:1px solid #999}}article{{padding:10px 20px;background:#f2f4f6}}</style></head><body>
 <h1>Pre-render story selection</h1><p>UNAUDITED · NOT APPROVED. Outcome: {escape(report['outcome'])}.
 {len(report['windows'])} transcript windows tracked. Coverage complete: {report['coverage_complete']}. This preview is not a final-audio or visual audit.</p>
-<ul>{reasons}</ul>{''.join(sections) or '<p>No story proposals.</p>'}</body></html>'''
+<ul>{reasons}</ul>{context}{''.join(sections) or '<p>No story proposals.</p>'}</body></html>'''
 
 
 def audit_preview(plan, bundle, manifest, directory):

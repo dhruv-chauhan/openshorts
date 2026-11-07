@@ -114,6 +114,16 @@ class StoriesConfig(Contract):
         return self
 
 
+class CaptionConfig(Contract):
+    font_size: Annotated[int, Field(ge=40, le=96)] = 64
+    horizontal_margin: Annotated[int, Field(ge=32, le=200)] = 72
+    content_gap: Annotated[int, Field(ge=16, le=160)] = 48
+    bottom_safe_margin: Annotated[int, Field(ge=120, le=480)] = 256
+    max_lines: Annotated[int, Field(ge=1, le=2)] = 2
+    max_duration: Annotated[float, Field(ge=1, le=6)] = 3.5
+    max_gap: Annotated[float, Field(ge=.1, le=1)] = .65
+
+
 class MediaConfig(Contract):
     aspect_ratio: Literal["9:16"] = "9:16"
     width: Literal[1080] = 1080
@@ -122,6 +132,7 @@ class MediaConfig(Contract):
     audio_codec: Literal["aac"] = "aac"
     layout: Literal["track_general", "preserve_full_width"] = "track_general"
     captions: bool = True
+    caption_style: CaptionConfig | None = None
     hook_overlay: bool = False
     language: Text = "en"
     whisper_model: Text = "small"
@@ -129,6 +140,13 @@ class MediaConfig(Contract):
     whisper_compute: Literal["int8", "float16", "float32"] = "int8"
     encoder: Literal["x264", "nvenc", "auto"] = "x264"
     render_workers: Annotated[int, Field(ge=1, le=1)] = 1
+
+    @model_serializer(mode='wrap')
+    def preserve_legacy_hashes(self, handler):
+        data = handler(self)
+        if self.caption_style is None:
+            data.pop('caption_style', None)
+        return data
 
     @model_validator(mode="after")
     def compute_device(self):

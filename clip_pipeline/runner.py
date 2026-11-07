@@ -40,15 +40,25 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
                 fixture_path: Path | None = None,
                 transcript_path: Path | None = None,
                 render_request: ManualRenderRequest | None = None,
-                story_plan_path: Path | None = None) -> tuple[RunManifest, Path]:
+                story_plan_path: Path | None = None, source_only: bool = False,
+                review_selection_run_id: str | None = None) -> tuple[RunManifest, Path]:
     """Validate all input JSON before creating or locking a workspace.
 
     Media content is not opened, downloaded, or hashed here. Source binding and
     accurate timing checks against real media belong to Phase C.
     """
     config = load_config(config_path)
+    review_inputs = {}
+    if review_selection_run_id is not None:
+        if any(x is not None for x in (source, fixture_path, transcript_path, render_request, story_plan_path)) or source_only:
+            raise ArtifactError('review render supplies its own pinned plan and transcript')
+        from .review_render import review_inputs_for
+        plan, transcript_path, review_inputs = review_inputs_for(config, review_selection_run_id)
+    if source_only and any(x is not None for x in (fixture_path, render_request, story_plan_path)):
+        raise ArtifactError('source-only cannot render or consume a fixture')
     policy, snapshot = load_inputs(config)
-    plan = read_json_model(story_plan_path, StoryPlan) if story_plan_path is not None else None
+    if review_selection_run_id is None:
+        plan = read_json_model(story_plan_path, StoryPlan) if story_plan_path is not None else None
     if plan is not None:
         from .stories import validate_plan_config
         if source is not None or fixture_path is not None or render_request is not None:
@@ -92,6 +102,7 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
     inputs = {"config": ("resolved-config.json", config),
               "policy": ("policy.json", policy),
               "submission": ("submission.json", source)}
+    inputs.update(review_inputs)
     if plan is not None and 'enrichment' in plan.selection_binding:
         from .enrichment import load_knowledge
         knowledge = load_knowledge(config.enrichment)
@@ -122,7 +133,7 @@ def prepare_run(config_path: Path, source: SourceInput | None = None, *,
         manifest = RunManifest(
             implementation_version=__version__, run_id=run_id,
             created_at=now, updated_at=now,
-            execution_kind=("manual_stories" if plan is not None else
+            execution_kind=("source" if source_only else "manual_stories" if plan is not None else
                             "manual_render" if render_request is not None else
                             "fixture" if fixture is not None else "preparation"),
             source=source, input_fingerprint=digest({k: v.sha256 for k, v in refs.items()}),
@@ -157,6 +168,9 @@ def inspect_run(workspace: Path, run_id: str) -> RunManifest:
     if manifest.execution_kind == "story_audit":
         from .audit_runner import validate_audit_checkpoint
         validate_audit_checkpoint(manifest, store.run_dir(run_id), config)
+    if manifest.execution_kind == 'source' and manifest.stage in {'ingested','transcribed'}:
+        from .source_runner import validate_source_checkpoint
+        validate_source_checkpoint(manifest,store.run_dir(run_id),config)
     return manifest
 
 
