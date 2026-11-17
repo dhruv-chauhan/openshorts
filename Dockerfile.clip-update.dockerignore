@@ -1,0 +1,8 @@
+**
+!Dockerfile.clip-update
+!clip_pipeline/
+!clip_pipeline/**
+!configs/
+!configs/**
+**/__pycache__/**
+**/*.pyc

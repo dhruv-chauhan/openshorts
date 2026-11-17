@@ -326,6 +326,11 @@ class FoundryBackend:
 def safe_repair_hint(error):
     """Only fixed developer-authored hints; never echo rejected source/model text."""
     hints = {
+        'story has no validated in-story asset relation':
+            ' Every story needs at least one supplied relation ID with evidence wholly inside its first/last segment boundaries. Omit a story with no grounded enabled-asset relation. Do not borrow group evidence from another story or map an unlisted company to peers.',
+        'sequence count exceeds configured limit':
+            ' Respect max_sequences in the supplied settings; choose complete sequences within that limit, never truncate a story.',
+
         'stories must be chronological and nonoverlapping':
             ' All proposed stories must be chronological and disjoint. Do not propose alternative cuts of the same passage. Combine shared context into one story.',
         'source spans may not overlap across sequences':

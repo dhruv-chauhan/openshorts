@@ -1,0 +1,367 @@
+{
+  "schema_version": "1",
+  "workspace": "../output/clip-pipeline",
+  "policy_path": "asset-policy.v1.json",
+  "foundry": {
+    "endpoint": "https://YOUR-RESOURCE.openai.azure.com/openai/v1/",
+    "relevance_deployment": "YOUR-DEPLOYMENT",
+    "selection_deployment": "YOUR-DEPLOYMENT",
+    "audit_deployment": "YOUR-DEPLOYMENT",
+    "auth_mode": "managed_identity",
+    "structured_outputs": true,
+    "output_token_parameter": "max_completion_tokens",
+    "max_output_tokens": 4096,
+    "temperature": null,
+    "reasoning_effort": null
+  },
+  "markets": {
+    "mode": "api",
+    "url": "https://backend.example.invalid/allowed-markets",
+    "bearer_token_env": "CLIP_MARKETS_API_TOKEN"
+  },
+  "blob": {
+    "account_url": "https://YOUR-STORAGE.blob.core.windows.net",
+    "runs_container": "clip-runs",
+    "approved_container": "approved-clips"
+  },
+  "stories": {
+    "max_sequences": 5,
+    "max_stories_per_sequence": 5,
+    "max_story_seconds": 300.0,
+    "max_sequence_seconds": 900.0,
+    "preferred_sequence_min_seconds": 60.0,
+    "preferred_sequence_max_seconds": 180.0
+  },
+  "asset_policy": {
+    "mode": "asset-relevance-v1",
+    "sample_percent": 10,
+    "catalog": {
+      "version": "asset-relations-2026-11-17-v1",
+      "definitions": [
+        {
+          "relation_id": "company:anthropic",
+          "kind": "company",
+          "name": "Anthropic",
+          "aliases": [
+            "Anthropic"
+          ],
+          "market_ids": [
+            "xyz:ANT"
+          ],
+          "asset_types": [],
+          "description": "Named company or its explicitly named service; topical identity only, no supplier/customer fanout.",
+          "source_urls": [
+            "https://www.anthropic.com/news/anthropic-amazon-compute"
+          ]
+        },
+        {
+          "relation_id": "company:amazon",
+          "kind": "company",
+          "name": "Amazon",
+          "aliases": [
+            "Amazon",
+            "AWS",
+            "Amazon Web Services"
+          ],
+          "market_ids": [
+            "xyz:AMZN"
+          ],
+          "asset_types": [],
+          "description": "Named company or its explicitly named service; topical identity only, no supplier/customer fanout.",
+          "source_urls": [
+            "https://www.anthropic.com/news/anthropic-amazon-compute"
+          ]
+        },
+        {
+          "relation_id": "company:alphabet",
+          "kind": "company",
+          "name": "Alphabet",
+          "aliases": [
+            "Alphabet",
+            "Google",
+            "Google Cloud"
+          ],
+          "market_ids": [
+            "xyz:GOOGL"
+          ],
+          "asset_types": [],
+          "description": "Named company or its explicitly named service; topical identity only, no supplier/customer fanout.",
+          "source_urls": [
+            "https://www.anthropic.com/news/google-broadcom-partnership-compute"
+          ]
+        },
+        {
+          "relation_id": "company:nvidia",
+          "kind": "company",
+          "name": "NVIDIA",
+          "aliases": [
+            "Nvidia"
+          ],
+          "market_ids": [
+            "xyz:NVDA"
+          ],
+          "asset_types": [],
+          "description": "Named company or its explicitly named service; topical identity only, no supplier/customer fanout.",
+          "source_urls": [
+            "https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships"
+          ]
+        },
+        {
+          "relation_id": "company:microsoft",
+          "kind": "company",
+          "name": "Microsoft",
+          "aliases": [
+            "Microsoft",
+            "Azure",
+            "Microsoft Azure"
+          ],
+          "market_ids": [
+            "xyz:MSFT"
+          ],
+          "asset_types": [],
+          "description": "Named company or its explicitly named service; topical identity only, no supplier/customer fanout.",
+          "source_urls": [
+            "https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships"
+          ]
+        },
+        {
+          "relation_id": "company:broadcom",
+          "kind": "company",
+          "name": "Broadcom",
+          "aliases": [
+            "Broadcom"
+          ],
+          "market_ids": [
+            "xyz:AVGO"
+          ],
+          "asset_types": [],
+          "description": "Named company or its explicitly named service; topical identity only, no supplier/customer fanout.",
+          "source_urls": [
+            "https://www.anthropic.com/news/google-broadcom-partnership-compute"
+          ]
+        },
+        {
+          "relation_id": "group:ai-models",
+          "kind": "group",
+          "name": "AI models",
+          "aliases": [
+            "foundation models",
+            "frontier models",
+            "large language models"
+          ],
+          "market_ids": [
+            "xyz:ANT"
+          ],
+          "asset_types": [],
+          "description": "Explicit group-level discussion only. Pilot membership is incomplete; never use a company-only passage to admit its peers.",
+          "source_urls": [
+            "https://www.anthropic.com/news/anthropic-amazon-compute"
+          ]
+        },
+        {
+          "relation_id": "group:ai-cloud",
+          "kind": "group",
+          "name": "AI cloud",
+          "aliases": [
+            "cloud providers",
+            "hyperscalers",
+            "cloud infrastructure"
+          ],
+          "market_ids": [
+            "xyz:AMZN",
+            "xyz:GOOGL",
+            "xyz:MSFT"
+          ],
+          "asset_types": [],
+          "description": "Explicit group-level discussion only. Pilot membership is incomplete; never use a company-only passage to admit its peers.",
+          "source_urls": [
+            "https://www.anthropic.com/news/anthropic-amazon-compute",
+            "https://www.anthropic.com/news/google-broadcom-partnership-compute",
+            "https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships"
+          ]
+        },
+        {
+          "relation_id": "group:ai-accelerators",
+          "kind": "group",
+          "name": "AI accelerators",
+          "aliases": [
+            "AI chips",
+            "GPUs",
+            "AI silicon"
+          ],
+          "market_ids": [
+            "xyz:AMZN",
+            "xyz:AVGO",
+            "xyz:GOOGL",
+            "xyz:NVDA"
+          ],
+          "asset_types": [],
+          "description": "Explicit group-level discussion only. Pilot membership is incomplete; never use a company-only passage to admit its peers.",
+          "source_urls": [
+            "https://www.anthropic.com/news/anthropic-amazon-compute",
+            "https://www.anthropic.com/news/google-broadcom-partnership-compute",
+            "https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships"
+          ]
+        },
+        {
+          "relation_id": "group:mag7",
+          "kind": "group",
+          "name": "Magnificent Seven",
+          "aliases": [
+            "Magnificent 7",
+            "Mag-7",
+            "Mag 7",
+            "Mag Seven"
+          ],
+          "market_ids": [
+            "xyz:AAPL",
+            "xyz:AMZN",
+            "xyz:GOOGL",
+            "xyz:META",
+            "xyz:MSFT",
+            "xyz:NVDA",
+            "xyz:TSLA"
+          ],
+          "asset_types": [],
+          "description": "Named seven-company group; intersect with the enabled canonical universe.",
+          "source_urls": [
+            "https://www.roundhillinvestments.com/etf/mags/"
+          ]
+        },
+        {
+          "relation_id": "group:equities",
+          "kind": "group",
+          "name": "stock market",
+          "aliases": [
+            "equity market",
+            "equities",
+            "stocks",
+            "broad market"
+          ],
+          "market_ids": [],
+          "asset_types": [
+            "equity",
+            "index",
+            "pre_ipo",
+            "etf"
+          ],
+          "description": "Explicit broad equities discussion, not an isolated unlisted company. Types are policy-defined topical coverage, not index constituents.",
+          "source_urls": [
+            "https://docs.trade.xyz/perpetuals/specifications-and-schedules/specification-index"
+          ]
+        },
+        {
+          "relation_id": "group:commodity",
+          "kind": "group",
+          "name": "commodities",
+          "aliases": [
+            "commodity markets"
+          ],
+          "market_ids": [],
+          "asset_types": [
+            "commodity"
+          ],
+          "description": "Explicit asset-class discussion only; intersect with enabled catalog asset types.",
+          "source_urls": [
+            "https://docs.trade.xyz/perpetuals/specifications-and-schedules/specification-index"
+          ]
+        },
+        {
+          "relation_id": "group:fx",
+          "kind": "group",
+          "name": "foreign exchange",
+          "aliases": [
+            "currencies",
+            "forex"
+          ],
+          "market_ids": [],
+          "asset_types": [
+            "fx"
+          ],
+          "description": "Explicit asset-class discussion only; intersect with enabled catalog asset types.",
+          "source_urls": [
+            "https://docs.trade.xyz/perpetuals/specifications-and-schedules/specification-index"
+          ]
+        },
+        {
+          "relation_id": "group:crypto",
+          "kind": "group",
+          "name": "cryptocurrency",
+          "aliases": [
+            "crypto market",
+            "cryptocurrencies"
+          ],
+          "market_ids": [],
+          "asset_types": [
+            "crypto"
+          ],
+          "description": "Explicit asset-class discussion only; intersect with enabled catalog asset types.",
+          "source_urls": [
+            "https://docs.trade.xyz/perpetuals/specifications-and-schedules/specification-index"
+          ]
+        },
+        {
+          "relation_id": "macro:equities",
+          "kind": "macro",
+          "name": "macroeconomy",
+          "aliases": [
+            "Federal Reserve",
+            "Fed",
+            "CPI",
+            "inflation",
+            "interest rates",
+            "borrowing costs",
+            "capital flows",
+            "investor sentiment"
+          ],
+          "market_ids": [],
+          "asset_types": [
+            "equity",
+            "index",
+            "pre_ipo",
+            "etf"
+          ],
+          "description": "Macro discussion explicitly relating to stocks or equity markets; a person or company anecdote alone does not qualify.",
+          "source_urls": [
+            "https://docs.trade.xyz/perpetuals/specifications-and-schedules/specification-index"
+          ]
+        },
+        {
+          "relation_id": "person:dario-amodei",
+          "kind": "person",
+          "name": "Dario Amodei",
+          "aliases": [
+            "Dario"
+          ],
+          "market_ids": [
+            "xyz:ANT"
+          ],
+          "asset_types": [],
+          "description": "Anthropic co-founder; only when the passage concerns his Anthropic role or views, not unrelated personal activity.",
+          "source_urls": [
+            "https://www.anthropic.com/company/leadership"
+          ]
+        },
+        {
+          "relation_id": "person:jensen-huang",
+          "kind": "person",
+          "name": "Jensen Huang",
+          "aliases": [
+            "Jensen"
+          ],
+          "market_ids": [
+            "xyz:NVDA"
+          ],
+          "asset_types": [],
+          "description": "NVIDIA founder; do not assume current executive title or infer views on other companies.",
+          "source_urls": [
+            "https://nvidianews.nvidia.com/bios/jensen-huang"
+          ]
+        }
+      ]
+    }
+  },
+  "enrichment": {
+    "mode": "off"
+  }
+}

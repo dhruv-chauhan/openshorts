@@ -99,13 +99,25 @@ def promote(workspace,run_id,*,sink_factory=BlobSink,fetch=fetch_markets):
     with store.lock(), termination():
         manifest=inspect_run(store.workspace,run_id);directory=store.run_dir(run_id)
         if manifest.execution_kind!='story_audit' or manifest.stage not in {'reviewed','stored'}:
-            raise ArtifactError('promotion requires a completed human review')
+            raise ArtifactError('promotion requires a completed human review or automated policy decision')
         if manifest.stage=='stored':return manifest
         def read(key,model):return read_json_model(directory/manifest.artifacts[key].path,model)
         config,plan,source,transcript,policy,markets=audit_inputs(manifest,directory)
         if config.blob is None:raise ArtifactError('Blob destination must be configured')
-        bundle=read('audit_bundle',AuditBundle);review=read('human_review',HumanReview)
-        approved=validate_review(manifest,bundle,review,plan)
+        bundle=read('audit_bundle',AuditBundle)
+        authority_name = 'review'
+        original_plan = plan
+        if config.asset_policy is not None:
+            from .asset_contracts import AutomatedDecision
+            from .asset_approval import validate_decision
+            from .contracts import StoryPlan
+            review = read('automated_decision', AutomatedDecision)
+            approved = validate_decision(manifest, bundle, review, plan, config, directory)
+            plan = read('release_plan', StoryPlan)
+            authority_name = 'decision'
+        else:
+            review=read('human_review',HumanReview)
+            approved=validate_review(manifest,bundle,review,plan)
         if not approved:raise ArtifactError('no fully approved sequences to promote')
         approved_plan=plan.model_copy(update={'sequences':[s for s in plan.sequences if s.sequence_id in approved]})
         knowledge=read('render.enrichment',KnowledgeSnapshot) if 'render.enrichment' in manifest.artifacts else None
@@ -143,17 +155,17 @@ def promote(workspace,run_id,*,sink_factory=BlobSink,fetch=fetch_markets):
                         'source_span':story.span.model_dump(),'story_audit':next(i.model_dump() for i in bundle.stories if i.item_id==story.story_id)})
                 seq_value={'schema_version':'1','approved':True,'sequence_id':seq.sequence_id,'title':seq.title,
                     'source':source.model_dump(mode='json'),'ordered_stories':stories,
-                    'audit_sha256':digest(bundle),'review_sha256':digest(review),
+                    'audit_sha256':digest(bundle),authority_name+'_sha256':digest(review),
                     'sequence_audit':next(i.model_dump() for i in bundle.sequences if i.item_id==seq.sequence_id),
                     'model_provenance':model_provenance,
                     'knowledge_sha256':digest(knowledge) if knowledge else None,'policy_sha256':digest(policy)}
                 sequences.append(content(prefix+'/sequences/'+seq.sequence_id+'.json',seq_value))
-            review_ref=content(prefix+'/review.json',review.model_dump(mode='json'))
-            commit={'schema_version':'1','approved':True,'run_id':run_id,'source_sha256':source.media_sha256,
-                'sequences':sequences,'review':review_ref,'audit_sha256':digest(bundle),
+            review_ref=content(prefix+'/'+authority_name+'.json',review.model_dump(mode='json'))
+            commit={'schema_version':'2' if config.asset_policy is not None else '1','approved':True,'run_id':run_id,'source_sha256':source.media_sha256,
+                'sequences':sequences,authority_name:review_ref,'audit_sha256':digest(bundle),
                 'market_snapshot_sha256':digest(current),'market_mode':config.markets.mode,
                 'development_market_universe':config.markets.mode!='api',
-                'excluded_sequence_ids':[q.sequence_id for q in plan.sequences if q.sequence_id not in approved]}
+                'excluded_sequence_ids':[q.sequence_id for q in original_plan.sequences if q.sequence_id not in approved]}
             publication={'objects':objects,'commit':commit,'commit_key':prefix+'/commit.json',
                          'audit_sha256':digest(bundle),'review_sha256':digest(review),'market_check':refresh}
             ref=store.write_artifact(run_id,'promotion-plan-'+uuid4().hex+'.json',publication)
@@ -166,7 +178,7 @@ def promote(workspace,run_id,*,sink_factory=BlobSink,fetch=fetch_markets):
             with sink_factory(config) as sink:
                 sink.ensure_private(config.blob.runs_container);sink.ensure_private(config.blob.approved_container)
                 # Store provenance in the run container without exporting credentials/config.
-                evidence=json_bytes({'audit':bundle.model_dump(),'review':review.model_dump(mode='json'),
+                evidence=json_bytes({'audit':bundle.model_dump(),authority_name:review.model_dump(mode='json'),
                     'policy':policy.model_dump(),'markets':markets.model_dump(),
                     'knowledge':knowledge.model_dump() if knowledge else None,
                     'model_provenance':model_provenance,

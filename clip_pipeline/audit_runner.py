@@ -18,6 +18,13 @@ from .execution import _worker, termination
 from .stories import all_stories, validate_story_checkpoint, validate_plan_transcript, validate_plan_config
 
 
+def audit_prompts(config):
+    if config.asset_policy is not None:
+        from .asset_audit import prompt_snapshot
+        return prompt_snapshot()
+    return {'version': PROMPT_VERSION, 'audit': AUDIT}
+
+
 def prepare_audit(config_path, render_workspace, render_run_id):
     config=load_config(config_path);policy,_=load_inputs(config)
     original_store=ArtifactStore(Path(render_workspace))
@@ -37,7 +44,7 @@ def prepare_audit(config_path, render_workspace, render_run_id):
         markets,provenance=fetch_markets(config.markets,store.workspace/'cache/markets')
         inputs={'config':config,'policy':policy,'submission':original.source,'markets':markets,
                 'market_fetch':provenance,'render_manifest':original,
-                'audit_prompts':{'version':PROMPT_VERSION,'audit':AUDIT}}
+                'audit_prompts':audit_prompts(config)}
         refs={k:store.write_artifact(run_id,k+'.json',v) for k,v in inputs.items()}
         needed={k for k in original.artifacts if k not in {'source_media','supplied_transcript'}}
         total=sum(original.artifacts[k].size_bytes for k in needed)
@@ -58,7 +65,8 @@ def prepare_audit(config_path, render_workspace, render_run_id):
 
 def audit_binding(manifest):
     return {k:manifest.artifacts[k].sha256 for k in [*manifest.input_artifact_keys,
-            *sorted(k for k in manifest.artifacts if k.startswith('inspection.'))]}
+            *sorted(k for k in manifest.artifacts if k.startswith('inspection.')),
+            *(['release_plan'] if 'release_plan' in manifest.artifacts else [])]}
 
 
 def audit_inputs(manifest,directory):
@@ -78,7 +86,7 @@ def execute_audit(workspace,run_id,*,backend_factory=FoundryBackend,worker=_work
         def path(key):return directory/manifest.artifacts[key].path
         config,plan,source,transcript,policy,markets=audit_inputs(manifest,directory)
         validate_plan_transcript(plan,source,transcript,config)
-        if json.loads(path('audit_prompts').read_text())!={'version':PROMPT_VERSION,'audit':AUDIT}:
+        if json.loads(path('audit_prompts').read_text())!=audit_prompts(config):
             raise ArtifactError('audit implementation changed; prepare a new audit')
         def save(**changes):
             nonlocal manifest
@@ -132,16 +140,29 @@ def execute_audit(workspace,run_id,*,backend_factory=FoundryBackend,worker=_work
                     from .corrections import correction_issues
                     deterministic=[*inspection.issues,*metadata_issues(story,markets,knowledge,previous_markets),
                                    *review_only_issues(plan),*correction_issues(transcript,story.span.start,story.span.end)]
+                    if config.asset_policy is not None:
+                        from .asset_audit import relation_issues
+                        deterministic += relation_issues(story, transcript, markets, config)
                     if not inspection.transcript:
                         deterministic.append(AuditIssue(issue_id='final_asr_missing',rule_id='audit_complete',severity='reject',kind='media',
                             explanation='Final audio could not be audited; correct media and rerun.',source_segment_ids=[],final_segment_ids=[]))
                         result=ItemAudit(item_id=story.story_id,kind='story',target_sha256=digest(target),
                             semantic=SemanticAudit(decision='pass',rules=[],issues=[],summary='Semantic audit unavailable.'),deterministic_issues=deterministic)
+                    elif config.asset_policy is not None:
+                        from .asset_audit import story_audit
+                        result = story_audit(story, target, inspection, transcript, markets, config, call, deterministic)
                     else:
                         result=audit_item('story',story.story_id,target,payload,policy,call,deterministic)
                     story_results.append(result)
+                if config.asset_policy is not None:
+                    from .asset_audit import release_sequences, sequence_audit
+                    release = release_sequences(plan, story_results)
+                    artifact('release_plan', release)
                 for seq in plan.sequences:
                     target=read_json_model(path('render.sequence.'+seq.sequence_id),SequenceManifest)
+                    if config.asset_policy is not None:
+                        sequence_results.append(sequence_audit(seq, target, story_results, plan))
+                        continue
                     payload=shared|{'proposed_metadata_not_evidence':[display_metadata(s) for s in seq.stories],
                         'source_context':source_context(transcript,seq.stories[0].span.start,seq.stories[-1].span.end,config.audit.context_padding_seconds),
                         'omitted_source_intervals':[{'start':a.span.end,'end':b.span.start} for a,b in zip(seq.stories,seq.stories[1:]) if b.span.start>a.span.end],
@@ -153,14 +174,26 @@ def execute_audit(workspace,run_id,*,backend_factory=FoundryBackend,worker=_work
                             explanation='One or more final story transcripts are missing.',source_segment_ids=[],final_segment_ids=[])]
                     result=audit_item('sequence',seq.sequence_id,target,payload,policy,call,deterministic)
                     sequence_results.append(result)
+                if config.asset_policy is not None:
+                    originals = {q.sequence_id for q in plan.sequences}
+                    for seq in release.sequences:
+                        if seq.sequence_id in originals: continue
+                        stories = [read_json_model(path('render.story.'+s.story_id+'.story'), StoryArtifact) for s in seq.stories]
+                        target = SequenceManifest(plan_sha256=digest(release), source_sha256=plan.source_sha256,
+                            transcript_sha256=plan.transcript_sha256, sequence=seq, stories=stories,
+                            duration_seconds=sum(s.final.duration_seconds for s in stories))
+                        artifact('render.sequence.'+seq.sequence_id, target)
+                        sequence_results.append(sequence_audit(seq, target, story_results, plan))
             bundle=AuditBundle(binding=audit_binding(manifest),stories=story_results,sequences=sequence_results)
             artifact('audit_bundle',bundle)
             from .review import review_template
             from .report import audit_preview
-            artifact('review_template',review_template(manifest,bundle))
+            if config.asset_policy is None:
+                artifact('review_template',review_template(manifest,bundle))
             preview=directory/('audit-preview-'+uuid4().hex+'.html')
             atomic_write(preview,audit_preview(plan,bundle,manifest,directory).encode())
-            save(artifacts=manifest.artifacts|{'preview':reference(preview,directory)},state='checkpointed',stage='audited',reason_code='human_review_required')
+            save(artifacts=manifest.artifacts|{'preview':reference(preview,directory)},state='checkpointed',stage='audited',
+                 reason_code='policy_decision_ready' if config.asset_policy is not None else 'human_review_required')
             return inspect_run(store.workspace,run_id)
         except KeyboardInterrupt:
             save(state='interrupted',outcome=None,reason_code='audit_interrupted');raise
@@ -174,8 +207,14 @@ def validate_audit_checkpoint(manifest,directory,config):
     bundle=read_json_model(directory/manifest.artifacts['audit_bundle'].path,AuditBundle)
     if bundle.binding!=audit_binding(manifest):raise ArtifactError('audit input binding mismatch')
     _,plan,_,transcript,_,_=audit_inputs(manifest,directory)
+    sequences = list(plan.sequences)
+    if config.asset_policy is not None:
+        from .asset_audit import validate_release
+        release = validate_release(manifest, directory, bundle, plan)
+        original_ids = {q.sequence_id for q in sequences}
+        sequences += [q for q in release.sequences if q.sequence_id not in original_ids]
     for kind,items,expected in [('story',bundle.stories,{s.story_id for s in all_stories(plan)}),
-                               ('sequence',bundle.sequences,{q.sequence_id for q in plan.sequences})]:
+                               ('sequence',bundle.sequences,{q.sequence_id for q in sequences})]:
         if len(items)!=len(expected) or {i.item_id for i in items}!=expected:raise ArtifactError('incomplete audit coverage')
         for item in items:
             from .review_render import review_only_issues
@@ -183,14 +222,20 @@ def validate_audit_checkpoint(manifest,directory,config):
                 raise ArtifactError('review-only audit hold missing')
             from .corrections import correction_issues
             targets = {s.story_id:(s.span.start,s.span.end) for s in all_stories(plan)} if kind=='story' else {
-                q.sequence_id:(q.stories[0].span.start,q.stories[-1].span.end) for q in plan.sequences}
-            if any(issue not in item.deterministic_issues for issue in correction_issues(transcript,*targets[item.item_id])):
+                q.sequence_id:(q.stories[0].span.start,q.stories[-1].span.end) for q in sequences}
+            if (kind == 'story' or config.asset_policy is None) and any(issue not in item.deterministic_issues for issue in correction_issues(transcript,*targets[item.item_id])):
                 raise ArtifactError('transcript correction review missing')
             key='render.story.'+item.item_id+'.story' if kind=='story' else 'render.sequence.'+item.item_id
             model=StoryArtifact if kind=='story' else SequenceManifest
             if item.kind!=kind or item.target_sha256!=digest(read_json_model(directory/manifest.artifacts[key].path,model)):
                 raise ArtifactError('audit target mismatch')
     if manifest.stage in {'reviewed','stored'}:
+        if config.asset_policy is not None:
+            from .asset_approval import validate_decision
+            from .asset_contracts import AutomatedDecision
+            decision = read_json_model(directory/manifest.artifacts['automated_decision'].path, AutomatedDecision)
+            validate_decision(manifest, bundle, decision, plan, config, directory)
+            return
         from .review import validate_review
         from .audit_contracts import HumanReview
         review=read_json_model(directory/manifest.artifacts['human_review'].path,HumanReview)

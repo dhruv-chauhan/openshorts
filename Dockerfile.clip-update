@@ -1,0 +1,8 @@
+# Code/config-only release over a previously validated immutable media runtime.
+# Use Dockerfile.clip for any dependency, system package or model change.
+ARG ENGINE_BASE
+FROM ${ENGINE_BASE}
+WORKDIR /app
+COPY clip_pipeline ./clip_pipeline
+COPY configs ./configs
+RUN python -m compileall -q clip_pipeline

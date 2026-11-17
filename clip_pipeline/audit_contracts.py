@@ -1,6 +1,6 @@
 """Final-media audit and explicit human review; neither silently approves content."""
 from typing import Literal
-from pydantic import AwareDatetime, Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator, model_serializer
 from .contracts import Contract, Text, Sha256, StoryId, RuleResult, TranscriptArtifact
 
 
@@ -50,6 +50,14 @@ class MediaInspection(Contract):
 
 
 class ItemAudit(Contract):
+    independently_understandable: bool | None = None
+
+    @model_serializer(mode='wrap')
+    def preserve_strict(self, handler):
+        data = handler(self)
+        if self.independently_understandable is None:
+            data.pop('independently_understandable', None)
+        return data
     item_id: StoryId
     kind: Literal['story', 'sequence']
     target_sha256: Sha256

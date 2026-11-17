@@ -64,6 +64,14 @@ def selection_preview(plan, report, transcript):
     import json
     accepted = {s.sequence_id for s in plan.sequences}
     sections = []
+    if report.get('prompt_version', '').startswith('asset-relevance-selection-'):
+        for sequence in plan.sequences:
+            cards = []
+            for story in sequence.stories:
+                cards.append('<article><h3>' + escape(story.title) + '</h3><p>' +
+                    escape(', '.join(story.matched_market_ids)) + '</p><pre>' +
+                    escape(json.dumps([r.model_dump() for r in story.asset_relations], indent=2)) + '</pre></article>')
+            sections.append('<section><h2>' + escape(sequence.title) + '</h2>' + ''.join(cards) + '</section>')
     for region in report['proposals']:
         for sequence in region['sequences']:
             cards = []
@@ -132,8 +140,12 @@ def audit_preview(plan, bundle, manifest, directory):
                 f'<details><summary>One assessment per market; editorial inference is not speaker stance</summary>'
                 f'<pre>{escape(json.dumps(grouped_associations(story.enrichment),indent=2))}</pre></details></article>')
         cards.append(f'<p>{escape(seq.semantic.summary)}</p><pre>{escape(json.dumps([x.model_dump() for x in [*seq.deterministic_issues,*seq.semantic.issues]],indent=2))}</pre></section>')
-    return '''<!doctype html><html><head><meta charset="utf-8"><title>Final-media audit review</title>
+    html = '''<!doctype html><html><head><meta charset="utf-8"><title>Final-media audit review</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; media-src 'self' file:; style-src 'unsafe-inline'">
 <style>body{font:16px system-ui;max-width:900px;margin:24px auto;padding:20px}video{width:min(100%,360px);max-height:75vh}pre{white-space:pre-wrap;overflow-wrap:anywhere}article{border-top:1px solid #888;padding:16px}section{margin-bottom:40px}</style>
 </head><body><h1>Final-media audit — human review required</h1>
 <p>NOT APPROVED. Play every story in full, individually and in sequence. Check framing, charts, captions, audio, sync, boundaries and context. Review JSON binds exact media, metadata and audit hashes. Hard failures require corrected output and a new audit.</p>''' + ''.join(cards) + '</body></html>'
+    if config.asset_policy is not None:
+        html = html.replace('Final-media audit — human review required', 'Final-media audit — automated policy evaluation')
+        html = html.replace('NOT APPROVED. Play every story in full, individually and in sequence. Check framing, charts, captions, audio, sync, boundaries and context. Review JSON binds exact media, metadata and audit hashes. Hard failures require corrected output and a new audit.', 'Audit evidence is not publication authority. An explicit automated decision binds exact media, policy and audit hashes; failed stories cannot publish. Diagnostics remain available for post-publication sampling.')
+    return html
