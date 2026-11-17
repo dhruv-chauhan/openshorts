@@ -108,6 +108,10 @@ def grouped_associations(metadata):
 
 def display_metadata(story):
     data = story.model_dump(exclude={'enrichment', 'evidence', 'context'})
+    # Evidence and internal relationship records stay in the private audit bundle.
+    data.pop('asset_relations', None)
+    if story.asset_relations:
+        data['categories'] = [{'category_id': r.relation_id} for r in story.asset_relations if r.kind in ('group', 'macro')]
     # Unknown metadata is not a publishable assertion or a fabricated neutral tag.
     for key in ('speaker','timeframe','subject'):
         if data.get(key) is None:

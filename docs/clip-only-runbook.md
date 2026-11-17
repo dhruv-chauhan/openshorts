@@ -670,3 +670,43 @@ auditor still applies standalone-story checks. Define and test the dependency be
 relaxing those checks, and keep asserted metadata grounded. The current reference
 stories have separate sequence manifests; their order alone is not proof of later
 clarification. See the plan's acceptance and follow-up section for the evaluation scope.
+
+
+## Asset-relevance-first service profile
+
+The optional `asset_policy` configuration selects a separate policy path; omitting it
+preserves the strict human-review path described above. The service pins the full config,
+policy, relation catalog, prompts and engine image for every job. See
+`configs/clip-only.asset-relevance.example.json`, `configs/asset-policy.v1.json` and
+`configs/asset-relations.v1.json`. Catalog membership intersects enabled market IDs;
+curated person/group/macro relations do not invent eligibility for an unlisted company.
+
+Selection accepts grounded asset mentions and performance observations without requiring
+an economic exposure or directional thesis. Invalid optional tags are withheld as private
+diagnostics. A story with no valid in-span asset relation is excluded with a private reason, without
+invalidating other eligible candidates. A wholly excluded result terminates with no matches.
+When filtering a sequence, its title is taken from a retained story. Each rendered
+story receives independent audio transcription and one focused fidelity assessment.
+Actual identity, number, negation or meaning distortion blocks release. Sequence results
+are derived deterministically; partial salvage requires independent comprehensibility.
+
+The service adapter uses `asset_approval.apply_decision` with explicit service-attributed,
+hash-bound authority, then existing commit-last promotion. It never creates HumanReview
+or playback attestations. Automatic-mode runs reject manual review; inspection holds
+remain permanently blocked. Version-2 publication commits reference the automated decision.
+The content-api service independently checks evidence bytes, current market eligibility
+and publication objects before exposing a catalog entry. This engine alone does not
+provide authenticated catalog visibility or post-publication quality sampling.
+
+For code/config-only releases with unchanged dependencies, `Dockerfile.clip-update`
+extends an immutable validated engine image. Dependency changes require the full
+`Dockerfile.clip` build. Always test the adapter inside the resulting pinned runtime.
+Historical artifacts and immutable profiles must not be rewritten to apply a new policy.
+
+
+CI media acceptance retains independent-ASR caption disagreements as `review` findings.
+The offline smoke test requires all delivery checks to pass, verifies that lexical
+mismatches produce the exact review issue, and asserts that no approval or semantic
+bundle is generated. It does not require the two ASR passes to match verbatim.
+CI changes ownership only on generated synthetic diagnostics so the runner can upload
+reports from the root-owned media container; production artifact permissions are unchanged.

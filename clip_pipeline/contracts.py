@@ -12,6 +12,7 @@ from pydantic import (
 )
 
 from .enrichment_contracts import StoryEnrichment
+from .asset_contracts import AssetRelation
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -261,11 +262,14 @@ PlaybackRate = Annotated[float, Field(ge=1.0, le=1.1)]
 
 
 class StorySpec(Contract):
+    asset_relations: list[AssetRelation] = Field(default_factory=list)
     enrichment: StoryEnrichment | None = None
 
     @model_serializer(mode="wrap")
     def preserve_unenriched_hashes(self, handler):
         data = handler(self)
+        if not self.asset_relations:
+            data.pop('asset_relations', None)
         if self.enrichment is None:
             data.pop("enrichment", None)
         return data

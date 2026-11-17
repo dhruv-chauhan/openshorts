@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from pydantic import Field, field_validator, model_validator, model_serializer
 
 from .contracts import Contract, Text, TopicPolicy, MarketSnapshot, clean_https_url
+from .asset_contracts import AssetPolicy
 
 EnvName = Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]*$")]
 
@@ -221,6 +222,7 @@ class EnrichmentSnapshot(Contract):
 
 
 class PipelineConfig(Contract):
+    asset_policy: AssetPolicy | None = None
     schema_version: Literal["1"] = "1"
     workspace: Text
     policy_path: Text
@@ -237,12 +239,16 @@ class PipelineConfig(Contract):
     @model_serializer(mode="wrap")
     def preserve_off_hashes(self, handler):
         data = handler(self)
+        if self.asset_policy is None:
+            data.pop("asset_policy", None)
         if self.enrichment.mode == "off":
             data.pop("enrichment", None)
         return data
 
     @model_validator(mode="after")
     def model_budget(self):
+        if self.asset_policy is not None and self.enrichment.mode != 'off':
+            raise ValueError('asset relevance uses its own relation catalog, not economic enrichment')
         if self.foundry.max_output_tokens >= self.selection.context_budget_tokens:
             raise ValueError("context budget must leave room for input and reserved output")
         return self

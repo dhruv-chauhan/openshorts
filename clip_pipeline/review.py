@@ -52,6 +52,9 @@ def apply_review(workspace,run_id,review_path):
             raise ArtifactError('review requires a completed audit and cannot change published output')
         if 'promotion_plan' in manifest.artifacts:
             raise ArtifactError('publication already started; revised decisions require a new audit run')
+        from .config import PipelineConfig
+        config=read_json_model(directory/manifest.artifacts['config'].path,PipelineConfig)
+        if config.asset_policy is not None:raise ArtifactError('this profile requires an automated policy decision, not a human review')
         bundle=read_json_model(directory/manifest.artifacts['audit_bundle'].path,AuditBundle)
         plan=read_json_model(directory/manifest.artifacts['render.story_plan'].path,StoryPlan)
         review=read_json_model(review_path,HumanReview)

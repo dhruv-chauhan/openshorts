@@ -1,0 +1,29 @@
+{
+  "allowed_market_description": "Identifiable topical relation to at least one enabled canonical asset, including performance observations, education and opinions. No directional thesis or economic exposure is required.",
+  "equity_macro_description": "Explicit equity-market macro discussion maps to the enabled equity universe through curated relation definitions. Every story requires a nonempty enabled asset set.",
+  "rules": [
+    {
+      "instruction": "Require retained evidence for a direct identity or curated topical relation; never rescue an unmapped company using sector peers.",
+      "negative_examples": [],
+      "positive_examples": [],
+      "rule_id": "asset_relevance",
+      "severity": "reject"
+    },
+    {
+      "instruction": "Reject evidenced material changes to identity, numbers, negation, attribution or meaning; harmless ASR differences are diagnostics.",
+      "negative_examples": [],
+      "positive_examples": [],
+      "rule_id": "source_fidelity",
+      "severity": "reject"
+    },
+    {
+      "instruction": "Retain decodable final media, valid intervals, caption geometry and hash-bound immutable evidence.",
+      "negative_examples": [],
+      "positive_examples": [],
+      "rule_id": "media_integrity",
+      "severity": "reject"
+    }
+  ],
+  "schema_version": "1",
+  "version": "asset-relevance-v1"
+}

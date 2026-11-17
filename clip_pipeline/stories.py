@@ -12,6 +12,14 @@ def all_stories(plan):
 
 
 def validate_plan_config(plan, config):
+    if config.asset_policy is not None:
+        if plan.review_only:
+            raise ArtifactError('automatic policy cannot render quarantined plans')
+        for story in all_stories(plan):
+            if not story.asset_relations or not story.matched_market_ids or story.stance != 'unclear' or story.enrichment is not None:
+                raise ArtifactError('automatic policy requires unsigned enabled-asset relations')
+            if {m for r in story.asset_relations for m in r.market_ids} != set(story.matched_market_ids):
+                raise ArtifactError('story markets must equal the relation set')
     if config.media.hook_overlay:
         raise ArtifactError("story plans do not contain audited hook copy")
     if len(plan.sequences) > config.stories.max_sequences:

@@ -15,7 +15,10 @@ from .selection import select_stories
 from .transcript import validate_transcript
 
 
-def prompt_snapshot(enriched=False):
+def prompt_snapshot(enriched=False, asset_policy=None):
+    if asset_policy is not None:
+        from .asset_selection import snapshot
+        return snapshot()
     return prompts.snapshot(enriched)
 
 
@@ -28,7 +31,7 @@ def prepare_selection(config_path, source_path, transcript_path, *, reuse_run_id
         raise ArtifactError('selection requires a real source artifact')
     validate_transcript(transcript, source, config.media)
     inputs = {'config': config, 'policy': policy, 'source': source, 'submission': source.origin,
-              'transcript': transcript, 'prompts': prompt_snapshot(config.enrichment.mode == 'snapshot')}
+              'transcript': transcript, 'prompts': prompt_snapshot(config.enrichment.mode == 'snapshot', config.asset_policy)}
     if config.enrichment.mode == 'snapshot':
         from .enrichment import load_knowledge
         inputs['enrichment'] = load_knowledge(config.enrichment)
@@ -82,7 +85,7 @@ def execute_selection(workspace, run_id, *, backend_factory=FoundryBackend):
         source = read_json_model(path('source'), SourceArtifact)
         transcript = read_json_model(path('transcript'), TranscriptArtifact)
         policy = read_json_model(path('policy'), TopicPolicy)
-        if json.loads(path('prompts').read_text()) != prompt_snapshot(config.enrichment.mode == 'snapshot'):
+        if json.loads(path('prompts').read_text()) != prompt_snapshot(config.enrichment.mode == 'snapshot', config.asset_policy):
             raise ArtifactError('selection implementation changed; prepare a new run')
         save(state='running', stage='transcribed', reason_code='selection_started')
         try:
@@ -134,8 +137,12 @@ def execute_selection(workspace, run_id, *, backend_factory=FoundryBackend):
                     return response
                 from .enrichment_contracts import KnowledgeSnapshot
                 knowledge = read_json_model(path('enrichment'), KnowledgeSnapshot) if config.enrichment.mode == 'snapshot' else None
-                plan, report = select_stories(config, source, transcript, policy, markets, call,
-                    knowledge=knowledge, assessed_on=manifest.created_at.date().isoformat())
+                if config.asset_policy is not None:
+                    from .asset_selection import select
+                    plan, report = select(config, source, transcript, policy, markets, call)
+                else:
+                    plan, report = select_stories(config, source, transcript, policy, markets, call,
+                        knowledge=knowledge, assessed_on=manifest.created_at.date().isoformat())
             artifact('selection_report', report)
             artifact('story_plan', plan)
             from .report import selection_preview
