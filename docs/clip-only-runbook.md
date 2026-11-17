@@ -702,3 +702,11 @@ For code/config-only releases with unchanged dependencies, `Dockerfile.clip-upda
 extends an immutable validated engine image. Dependency changes require the full
 `Dockerfile.clip` build. Always test the adapter inside the resulting pinned runtime.
 Historical artifacts and immutable profiles must not be rewritten to apply a new policy.
+
+
+CI media acceptance retains independent-ASR caption disagreements as `review` findings.
+The offline smoke test requires all delivery checks to pass, verifies that lexical
+mismatches produce the exact review issue, and asserts that no approval or semantic
+bundle is generated. It does not require the two ASR passes to match verbatim.
+CI changes ownership only on generated synthetic diagnostics so the runner can upload
+reports from the root-owned media container; production artifact permissions are unchanged.
